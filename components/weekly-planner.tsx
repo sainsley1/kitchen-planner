@@ -248,18 +248,24 @@ export function WeeklyPlanner({
     }
   }
 
-  async function jobAction(job: WeeklyPlanJobRecord, action: "cancel" | "retry") {
+  async function jobAction(job: WeeklyPlanJobRecord, action: "cancel" | "retry" | "dismiss") {
     setBusy(true);
     setError("");
     try {
       const result = await request(`/api/v1/weekly-plans/jobs/${job.id}/${action}`, "POST");
       setJobs((current) =>
         action === "retry"
-          ? [result.job, ...current].slice(0, 5)
-          : current.map((entry) => (entry.id === job.id ? result.job : entry)),
+          ? [result.job, ...current.filter((entry) => entry.id !== job.id)].slice(0, 5)
+          : action === "dismiss"
+            ? current.filter((entry) => entry.id !== job.id)
+            : current.map((entry) => (entry.id === job.id ? result.job : entry)),
       );
       setMessage(
-        action === "retry" ? "Weekly planning was queued again." : "Weekly planning was cancelled.",
+        action === "retry"
+          ? "Weekly planning was queued again."
+          : action === "dismiss"
+            ? "The failed planning attempt was dismissed. Its usage and diagnostics are preserved."
+            : "Weekly planning was cancelled.",
       );
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : "Could not update the planning job.");
@@ -482,14 +488,24 @@ export function WeeklyPlanner({
                   </button>
                 )}
                 {["failed", "cancelled"].includes(job.status) && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={busy || hasActiveJob}
-                    onClick={() => jobAction(job, "retry")}
-                  >
-                    Retry
-                  </button>
+                  <div className="weekly-planning-job-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={busy || hasActiveJob}
+                      onClick={() => jobAction(job, "retry")}
+                    >
+                      Retry
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-link"
+                      disabled={busy}
+                      onClick={() => jobAction(job, "dismiss")}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
                 )}
                 {job.status === "failed" && job.errorMessage && (
                   <p className="form-error">{job.errorMessage}</p>

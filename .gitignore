@@ -12,10 +12,10 @@ coverage/
 !.env.example
 
 # Runtime and household data
-db/
-postgres/
-uploads/
-backups/
+/db/
+/postgres/
+/uploads/
+/backups/
 *.dump
 *.sql.gz
 *.bak

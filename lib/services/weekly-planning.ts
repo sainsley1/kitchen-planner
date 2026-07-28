@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
+import { z } from "zod";
 import type { HouseholdSession } from "@/lib/auth/session";
 import { appConfig } from "@/lib/config";
 import { getPool } from "@/lib/db/client";
@@ -49,8 +50,10 @@ type QueuedWeeklySnapshot = {
   stage: string;
   request: WeeklyPlanRequest;
   originalNotes: string;
+  dismissedAt?: string;
 };
 
+const weeklyPlanJobIdSchema = z.string().uuid();
 const REVIEWABLE_SHOPPING_FIELDS = ["item", "category", "quantity", "unit", "reason"] as const;
 
 function preserveReviewedShoppingEdits(current: WeeklyPlan, edited: WeeklyPlan): WeeklyPlan {
@@ -1310,37 +1313,104 @@ export async function getWeeklyPlanJob(actor: Actor, id: string): Promise<Weekly
 }
 
 export async function cancelWeeklyPlanJob(actor: Actor, id: string) {
+  const jobId = weeklyPlanJobIdSchema.parse(id);
   const result = await pool().query<{ status: string }>(
     `UPDATE ai_jobs SET status='cancelled',cancel_requested=true,error_message='Cancelled by the household.',completed_at=now(),input_snapshot=jsonb_set(input_snapshot,'{stage}','"cancelled"'::jsonb,true) WHERE id=$1 AND household_id=$2 AND workflow='weekly_planning' AND input_snapshot->>'jobKind'='weekly_plan_generation' AND status IN ('queued','running') RETURNING status`,
-    [id, actor.householdId],
+    [jobId, actor.householdId],
   );
   if (!result.rows[0]) throw new Error("Only a queued or running weekly plan can be cancelled");
-  planningControllers.get(id)?.abort();
+  planningControllers.get(jobId)?.abort();
   await pool().query(
     `UPDATE ai_runs SET status='cancelled',error_message='Cancelled by the household.',completed_at=now() WHERE job_id=$1 AND status='running'`,
-    [id],
+    [jobId],
   );
-  return getWeeklyPlanJob(actor, id);
+  return getWeeklyPlanJob(actor, jobId);
 }
 
 export async function retryWeeklyPlanJob(actor: Actor, id: string) {
-  const source = await pool().query<{
-    status: string;
-    inputSnapshot: QueuedWeeklySnapshot;
-    inputText: string | null;
-  }>(
-    `SELECT status,input_snapshot AS "inputSnapshot",input_text AS "inputText" FROM ai_jobs WHERE id=$1 AND household_id=$2 AND workflow='weekly_planning' AND input_snapshot->>'jobKind'='weekly_plan_generation'`,
-    [id, actor.householdId],
-  );
-  if (!source.rows[0]) throw new Error("Record not found");
-  if (!["failed", "cancelled"].includes(source.rows[0].status))
-    throw new Error("Only a failed or cancelled weekly plan can be retried");
-  const snapshot = { ...source.rows[0].inputSnapshot, stage: "queued" };
-  const created = await pool().query<{ id: string }>(
-    `INSERT INTO ai_jobs (household_id,actor_user_id,workflow,status,input_text,input_snapshot,retry_of_job_id) VALUES ($1,$2,'weekly_planning','queued',$3,$4::jsonb,$5) RETURNING id`,
-    [actor.householdId, actor.userId, source.rows[0].inputText, JSON.stringify(snapshot), id],
-  );
-  return getWeeklyPlanJob(actor, created.rows[0].id);
+  const jobId = weeklyPlanJobIdSchema.parse(id);
+  const retriedJobId = await transaction(async (client) => {
+    const source = await client.query<{
+      status: string;
+      inputSnapshot: QueuedWeeklySnapshot;
+      inputText: string | null;
+      errorMessage: string | null;
+    }>(
+      `SELECT status,input_snapshot AS "inputSnapshot",input_text AS "inputText",error_message AS "errorMessage" FROM ai_jobs WHERE id=$1 AND household_id=$2 AND workflow='weekly_planning' AND input_snapshot->>'jobKind'='weekly_plan_generation' FOR UPDATE`,
+      [jobId, actor.householdId],
+    );
+    if (!source.rows[0]) throw new Error("Record not found");
+    if (!["failed", "cancelled"].includes(source.rows[0].status))
+      throw new Error("Only a failed or cancelled weekly plan can be retried");
+    const { dismissedAt: _dismissedAt, ...sourceSnapshot } = source.rows[0].inputSnapshot;
+    const retrySnapshot = { ...sourceSnapshot, stage: "queued" };
+    const created = await client.query<{ id: string }>(
+      `INSERT INTO ai_jobs (household_id,actor_user_id,workflow,status,input_text,input_snapshot,retry_of_job_id) VALUES ($1,$2,'weekly_planning','queued',$3,$4::jsonb,$5) RETURNING id`,
+      [
+        actor.householdId,
+        actor.userId,
+        source.rows[0].inputText,
+        JSON.stringify(retrySnapshot),
+        jobId,
+      ],
+    );
+    const dismissedAt = new Date().toISOString();
+    const dismissedSnapshot = { ...source.rows[0].inputSnapshot, dismissedAt };
+    await client.query(
+      `UPDATE ai_jobs SET input_snapshot=$3::jsonb WHERE id=$1 AND household_id=$2`,
+      [jobId, actor.householdId, JSON.stringify(dismissedSnapshot)],
+    );
+    await audit(
+      client,
+      actor,
+      "ui",
+      "retry",
+      "weekly_plan_job",
+      jobId,
+      { status: source.rows[0].status, errorMessage: source.rows[0].errorMessage },
+      { status: source.rows[0].status, dismissedAt, retryJobId: created.rows[0].id },
+      "Retried weekly plan and dismissed the prior attempt from Planner",
+    );
+    return created.rows[0].id;
+  });
+  return getWeeklyPlanJob(actor, retriedJobId);
+}
+
+export async function dismissWeeklyPlanJob(actor: Actor, id: string) {
+  const jobId = weeklyPlanJobIdSchema.parse(id);
+  await transaction(async (client) => {
+    const source = await client.query<{
+      status: string;
+      inputSnapshot: QueuedWeeklySnapshot;
+      errorMessage: string | null;
+    }>(
+      `SELECT status,input_snapshot AS "inputSnapshot",error_message AS "errorMessage" FROM ai_jobs WHERE id=$1 AND household_id=$2 AND workflow='weekly_planning' AND input_snapshot->>'jobKind'='weekly_plan_generation' FOR UPDATE`,
+      [jobId, actor.householdId],
+    );
+    if (!source.rows[0]) throw new Error("Record not found");
+    if (!["failed", "cancelled"].includes(source.rows[0].status))
+      throw new Error("Only a failed or cancelled weekly plan can be dismissed");
+    if (source.rows[0].inputSnapshot.dismissedAt)
+      throw new Error("This weekly plan is already dismissed");
+    const dismissedAt = new Date().toISOString();
+    const dismissedSnapshot = { ...source.rows[0].inputSnapshot, dismissedAt };
+    await client.query(
+      `UPDATE ai_jobs SET input_snapshot=$3::jsonb WHERE id=$1 AND household_id=$2`,
+      [jobId, actor.householdId, JSON.stringify(dismissedSnapshot)],
+    );
+    await audit(
+      client,
+      actor,
+      "ui",
+      "dismiss",
+      "weekly_plan_job",
+      jobId,
+      { status: source.rows[0].status, errorMessage: source.rows[0].errorMessage },
+      { status: source.rows[0].status, dismissedAt },
+      "Dismissed failed weekly plan from Planner",
+    );
+  });
+  return getWeeklyPlanJob(actor, jobId);
 }
 
 // Synchronous compatibility helper for tests and internal maintenance. The UI
