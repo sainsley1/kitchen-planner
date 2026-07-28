@@ -54,6 +54,7 @@ import {
   archiveWeeklyPlan,
   cancelWeeklyPlanJob,
   commitWeeklyPlan,
+  dismissWeeklyPlanJob,
   materializeGeneratedWeeklyPlan,
   processWeeklyPlanJob,
   queueWeeklyPlan,
@@ -1111,6 +1112,18 @@ describe("premium weekly planning", () => {
       retryOfJobId: queued.id,
     });
     expect(retried.id).not.toBe(queued.id);
+    expect((await listWeeklyPlanJobs(householdId)).map((job) => job.id)).toEqual([retried.id]);
+    expect(
+      (
+        await database.query<{ action: string; reason: string }>(
+          `SELECT action,reason FROM audit_events WHERE entity_type='weekly_plan_job' AND entity_id=$1 ORDER BY created_at DESC LIMIT 1`,
+          [queued.id],
+        )
+      ).rows[0],
+    ).toEqual({
+      action: "retry",
+      reason: "Retried weekly plan and dismissed the prior attempt from Planner",
+    });
     await database.close();
   }, 30_000);
 
@@ -1172,6 +1185,41 @@ describe("premium weekly planning", () => {
       `SELECT model_tier AS tier,model,status FROM ai_runs`,
     );
     expect(runs.rows).toEqual([{ tier: "balanced", model: "gpt-5.6-terra", status: "failed" }]);
+    await database.close();
+  }, 30_000);
+
+  it("dismisses a failed plan from the Planner while retaining AI diagnostics and audit history", async () => {
+    const database = await createDatabase();
+    const timeout = new Error("Request timed out.");
+    timeout.name = "APIConnectionTimeoutError";
+    state.responses.push(timeout);
+    const queued = await queueWeeklyPlan(actor, request());
+    const failed = await processWeeklyPlanJob(queued.id);
+    expect((await listWeeklyPlanJobs(householdId)).map((job) => job.id)).toContain(failed.id);
+
+    const dismissed = await dismissWeeklyPlanJob(actor, failed.id);
+    expect(dismissed).toMatchObject({ id: failed.id, status: "failed" });
+    expect((await listWeeklyPlanJobs(householdId)).map((job) => job.id)).not.toContain(failed.id);
+    expect(
+      (
+        await database.query<{ count: number }>(
+          `SELECT count(*)::int AS count FROM ai_runs WHERE job_id=$1`,
+          [failed.id],
+        )
+      ).rows[0].count,
+    ).toBe(1);
+    expect(
+      (
+        await database.query<{ action: string; reason: string }>(
+          `SELECT action,reason FROM audit_events WHERE entity_type='weekly_plan_job' AND entity_id=$1 ORDER BY created_at DESC LIMIT 1`,
+          [failed.id],
+        )
+      ).rows[0],
+    ).toEqual({
+      action: "dismiss",
+      reason: "Dismissed failed weekly plan from Planner",
+    });
+    await expect(dismissWeeklyPlanJob(actor, failed.id)).rejects.toThrow(/already dismissed/i);
     await database.close();
   }, 30_000);
 

@@ -29,4 +29,15 @@ describe("release version consistency", () => {
     expect(loginForm).toContain("displayNames.map");
     expect(loginForm).not.toMatch(/<option>[^<{]+<\/option>/);
   });
+
+  it("keeps runtime data ignored without excluding source database modules", () => {
+    const ignoreLines = fs
+      .readFileSync(".gitignore", "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim());
+    expect(ignoreLines).toContain("/db/");
+    expect(ignoreLines).toContain("/postgres/");
+    expect(ignoreLines).not.toContain("db/");
+    expect(fs.existsSync("lib/db/queries.ts")).toBe(true);
+  });
 });

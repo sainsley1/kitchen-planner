@@ -6,7 +6,7 @@ const optionalSecret = z.preprocess(
 );
 
 const configSchema = z.object({
-  APP_VERSION: z.string().default("0.6.4.7"),
+  APP_VERSION: z.string().default("0.6.4.8"),
   DEMO_MODE: z.enum(["true", "false"]).default("true"),
   AUTH_MODE: z.enum(["disabled", "household"]).default("disabled"),
   DATABASE_URL: z.string().optional(),

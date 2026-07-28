@@ -1954,6 +1954,14 @@ button:disabled {
 .weekly-planning-job.completed {
   border-left-color: var(--green-mid);
 }
+.weekly-planning-job-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 10px;
+}
+.weekly-planning-job-actions .secondary-button {
+  flex: 1;
+}
 .weekly-planning-job .form-error {
   grid-column: 1 / -1;
   margin: 2px 0 0;

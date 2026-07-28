@@ -1,4 +1,4 @@
-# AI workflows in 0.6.4.7
+# AI workflows in 0.6.4.8
 
 ## Routing
 
@@ -28,7 +28,7 @@ Official references: [model selection](https://developers.openai.com/api/docs/mo
 8. Require explicit approval before model output changes household data.
 9. Apply approved mutations in a database transaction and append normal `source=ai` audit events.
 
-Warnings and household-validation failures make a routine economy or primary job eligible for an explicit advanced retry. A retry stores `retry_of_job_id`, uses the server-stored English normalization, and records its model tier and trigger reason.
+Warnings and household-validation failures make a routine economy or primary job eligible for an explicit advanced retry. A retry stores `retry_of_job_id`, uses the server-stored English normalization, and records its model tier and trigger reason. Failed or cancelled full-week jobs can be dismissed from the Planner without deleting their job/run diagnostics, token usage or audit history; retrying one automatically dismisses the superseded card.
 
 ## Workflow boundaries
 
