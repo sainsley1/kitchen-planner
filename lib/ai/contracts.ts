@@ -162,6 +162,7 @@ export const weeklyPlanCoverageExceptionSchema = z.object({
 export const weeklyPlanShoppingSchema = z.object({
   id: z.string().min(1).max(100),
   item: z.string().min(1).max(200),
+  requirementKey: z.string().min(1).max(500).nullable().optional(),
   category: z.string().min(1).max(100),
   quantity: z.number().positive().max(999_999.999).nullable(),
   unit: z.string().max(100).nullable(),
@@ -170,6 +171,15 @@ export const weeklyPlanShoppingSchema = z.object({
   suggestedStore: z.string().max(200).nullable().default(null),
   saleItemId: z.string().uuid().nullable().default(null),
   estimatedPrice: z.number().nonnegative().max(999_999.99).nullable().default(null),
+});
+
+export const weeklyPlanShoppingDecisionSchema = z.object({
+  requirementKey: z.string().min(1).max(500),
+  item: z.string().min(1).max(200),
+  unit: z.string().max(100).nullable(),
+  mealIds: z.array(z.string().min(1).max(100)).max(30),
+  action: z.enum(["exclude", "inventory"]),
+  inventoryEntryId: z.string().uuid().nullable(),
 });
 
 export const weeklyPlanReviewScorecardSchema = z.object({
@@ -204,6 +214,7 @@ export const weeklyPlanSchema = z.object({
   meals: z.array(weeklyPlanMealSchema).min(1).max(100),
   coverageExceptions: z.array(weeklyPlanCoverageExceptionSchema).max(50),
   shopping: z.array(weeklyPlanShoppingSchema).max(200),
+  shoppingDecisions: z.array(weeklyPlanShoppingDecisionSchema).max(200).default([]),
   prepTasks: z
     .array(
       z.object({
@@ -246,7 +257,13 @@ export const weeklyPlanGenerationMealSchema = weeklyPlanMealSchema
     notes: z.string().max(500).nullable(),
   });
 export const weeklyPlanGenerationSchema = weeklyPlanSchema
-  .omit({ planFormatVersion: true, meals: true, shopping: true, reviewScorecard: true })
+  .omit({
+    planFormatVersion: true,
+    meals: true,
+    shopping: true,
+    shoppingDecisions: true,
+    reviewScorecard: true,
+  })
   .extend({
     summary: z.string().min(1).max(1000),
     strategy: z.string().min(1).max(1500),

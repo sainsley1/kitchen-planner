@@ -7,6 +7,7 @@ import { appConfig } from "@/lib/config";
 import {
   getHouseholdTimezone,
   listHouseholdUsers,
+  listInventory,
   listMeals,
   listPendingMealInventoryReviews,
   listRecipes,
@@ -17,17 +18,27 @@ import {
 export const metadata: Metadata = { title: "Meal plan" };
 export default async function MealPlanPage() {
   const session = await requirePageSession();
-  const [items, users, recipes, unscheduled, timeZone, plans, planningJobs, inventoryReviews] =
-    await Promise.all([
-      listMeals(session.householdId),
-      listHouseholdUsers(session.householdId),
-      listRecipes(session.householdId),
-      listUnscheduled(session.householdId),
-      getHouseholdTimezone(session.householdId),
-      listWeeklyPlans(session.householdId),
-      listWeeklyPlanJobs(session.householdId),
-      listPendingMealInventoryReviews(session.householdId),
-    ]);
+  const [
+    items,
+    users,
+    recipes,
+    unscheduled,
+    inventory,
+    timeZone,
+    plans,
+    planningJobs,
+    inventoryReviews,
+  ] = await Promise.all([
+    listMeals(session.householdId),
+    listHouseholdUsers(session.householdId),
+    listRecipes(session.householdId),
+    listUnscheduled(session.householdId),
+    listInventory(session.householdId),
+    getHouseholdTimezone(session.householdId),
+    listWeeklyPlans(session.householdId),
+    listWeeklyPlanJobs(session.householdId),
+    listPendingMealInventoryReviews(session.householdId),
+  ]);
   return (
     <div className="page-stack">
       <div className="page-heading">
@@ -46,6 +57,7 @@ export default async function MealPlanPage() {
         users={users}
         recipes={recipes}
         unscheduled={unscheduled}
+        inventory={inventory}
         timeZone={timeZone}
         aiConfigured={appConfig.aiConfigured}
         balancedModel={appConfig.models.fallback}

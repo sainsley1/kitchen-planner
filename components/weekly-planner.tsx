@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { WeeklyPlan } from "@/lib/ai/contracts";
 import type {
   HouseholdUserRecord,
+  InventoryRecord,
   RecipeRecord,
   UnscheduledRecord,
   WeeklyPlanJobRecord,
@@ -19,6 +20,7 @@ type Meal = WeeklyPlan["meals"][number];
 type CoverageException = WeeklyPlan["coverageExceptions"][number];
 type ShoppingLine = WeeklyPlan["shopping"][number];
 type IngredientRequirement = Meal["ingredientRequirements"][number];
+type ShoppingDecision = WeeklyPlan["shoppingDecisions"][number];
 
 function defaultWindow(timeZone: string) {
   const today = householdDateKey(new Date(), timeZone);
@@ -77,6 +79,7 @@ function blankShopping(): ShoppingLine {
   return {
     id: `shopping-${Date.now()}`,
     item: "New item",
+    requirementKey: null,
     category: "Other",
     quantity: 1,
     unit: "each",
@@ -109,6 +112,7 @@ export function WeeklyPlanner({
   users,
   recipes,
   unscheduled,
+  inventory,
   timeZone,
   aiConfigured,
   balancedModel,
@@ -122,6 +126,7 @@ export function WeeklyPlanner({
   users: HouseholdUserRecord[];
   recipes: RecipeRecord[];
   unscheduled: UnscheduledRecord[];
+  inventory: InventoryRecord[];
   timeZone: string;
   aiConfigured: boolean;
   balancedModel: string;
@@ -146,6 +151,10 @@ export function WeeklyPlanner({
   const [message, setMessage] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [draft, setDraft] = useState<WeeklyPlan | null>(null);
+  const [inventorySearch, setInventorySearch] = useState<{
+    line: ShoppingLine;
+    query: string;
+  } | null>(null);
   const [replaceExisting, setReplaceExisting] = useState<Record<string, boolean>>({});
   const [restoreRevision, setRestoreRevision] = useState<Record<string, string>>({});
   const [jobs, setJobs] = useState(planningJobs);
@@ -337,6 +346,47 @@ export function WeeklyPlanner({
             ...current,
             shopping: current.shopping.map((item, itemIndex) =>
               itemIndex === index ? { ...item, ...patch } : item,
+            ),
+          }
+        : current,
+    );
+  }
+  function setShoppingDecision(
+    line: ShoppingLine,
+    action: ShoppingDecision["action"],
+    inventoryEntryId: string | null,
+  ) {
+    const requirementKey = line.requirementKey;
+    if (!requirementKey) return;
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            shoppingDecisions: [
+              ...current.shoppingDecisions.filter(
+                (decision) => decision.requirementKey !== requirementKey,
+              ),
+              {
+                requirementKey,
+                item: line.item,
+                unit: line.unit,
+                mealIds: [...line.mealIds],
+                action,
+                inventoryEntryId,
+              },
+            ],
+          }
+        : current,
+    );
+    setInventorySearch(null);
+  }
+  function undoShoppingDecision(requirementKey: string) {
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            shoppingDecisions: current.shoppingDecisions.filter(
+              (decision) => decision.requirementKey !== requirementKey,
             ),
           }
         : current,
@@ -1352,64 +1402,198 @@ export function WeeklyPlanner({
                       Add item
                     </button>
                   </div>
-                  {payload.shopping.map((item, index) => (
-                    <div className="plan-shopping-edit" key={item.id}>
+                  {payload.shopping
+                    .map((item, index) => ({ item, index }))
+                    .filter(
+                      ({ item }) =>
+                        !item.requirementKey ||
+                        !payload.shoppingDecisions.some(
+                          (decision) => decision.requirementKey === item.requirementKey,
+                        ),
+                    )
+                    .map(({ item, index }) => (
+                      <div className="plan-shopping-edit" key={item.id}>
+                        <input
+                          aria-label="Shopping item"
+                          value={item.item}
+                          onChange={(event) => updateShopping(index, { item: event.target.value })}
+                        />
+                        <input
+                          aria-label="Category"
+                          value={item.category}
+                          onChange={(event) =>
+                            updateShopping(index, { category: event.target.value })
+                          }
+                        />
+                        <input
+                          aria-label="Quantity"
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={item.quantity ?? ""}
+                          onChange={(event) =>
+                            updateShopping(index, {
+                              quantity:
+                                event.target.value === "" ? null : Number(event.target.value),
+                            })
+                          }
+                        />
+                        <input
+                          aria-label="Unit"
+                          value={item.unit ?? ""}
+                          onChange={(event) =>
+                            updateShopping(index, { unit: event.target.value || null })
+                          }
+                        />
+                        <input
+                          aria-label="Reason"
+                          value={item.reason}
+                          onChange={(event) =>
+                            updateShopping(index, { reason: event.target.value })
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="danger-link"
+                          onClick={() => {
+                            if (item.requirementKey) {
+                              setShoppingDecision(item, "exclude", null);
+                              return;
+                            }
+                            setDraft((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    shopping: current.shopping.filter(
+                                      (_, itemIndex) => itemIndex !== index,
+                                    ),
+                                  }
+                                : current,
+                            );
+                          }}
+                        >
+                          Remove
+                        </button>
+                        {item.requirementKey && (
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => setInventorySearch({ line: item, query: item.item })}
+                          >
+                            Find in inventory
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  {inventorySearch && (
+                    <div className="plan-inventory-association">
+                      <div className="editor-toolbar">
+                        <strong>Inventory for {inventorySearch.line.item}</strong>
+                        <button
+                          type="button"
+                          className="danger-link"
+                          onClick={() => setInventorySearch(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
                       <input
-                        aria-label="Shopping item"
-                        value={item.item}
-                        onChange={(event) => updateShopping(index, { item: event.target.value })}
-                      />
-                      <input
-                        aria-label="Category"
-                        value={item.category}
+                        autoFocus
+                        aria-label="Search current inventory"
+                        value={inventorySearch.query}
                         onChange={(event) =>
-                          updateShopping(index, { category: event.target.value })
-                        }
-                      />
-                      <input
-                        aria-label="Quantity"
-                        type="number"
-                        min="0"
-                        step="0.001"
-                        value={item.quantity ?? ""}
-                        onChange={(event) =>
-                          updateShopping(index, {
-                            quantity: event.target.value === "" ? null : Number(event.target.value),
-                          })
-                        }
-                      />
-                      <input
-                        aria-label="Unit"
-                        value={item.unit ?? ""}
-                        onChange={(event) =>
-                          updateShopping(index, { unit: event.target.value || null })
-                        }
-                      />
-                      <input
-                        aria-label="Reason"
-                        value={item.reason}
-                        onChange={(event) => updateShopping(index, { reason: event.target.value })}
-                      />
-                      <button
-                        type="button"
-                        className="danger-link"
-                        onClick={() =>
-                          setDraft((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  shopping: current.shopping.filter(
-                                    (_, itemIndex) => itemIndex !== index,
-                                  ),
-                                }
-                              : current,
+                          setInventorySearch((current) =>
+                            current ? { ...current, query: event.target.value } : current,
                           )
                         }
-                      >
-                        Remove
-                      </button>
+                      />
+                      <div className="inventory-association-results">
+                        {inventory
+                          .filter((entry) => {
+                            const query = inventorySearch.query.trim().toLocaleLowerCase();
+                            return (
+                              !query ||
+                              `${entry.ingredient} ${entry.brandVariety ?? ""} ${entry.category}`
+                                .toLocaleLowerCase()
+                                .includes(query)
+                            );
+                          })
+                          .slice(0, 20)
+                          .map((entry) => (
+                            <button
+                              type="button"
+                              className="inventory-association-option"
+                              key={entry.id}
+                              onClick={() =>
+                                setShoppingDecision(inventorySearch.line, "inventory", entry.id)
+                              }
+                            >
+                              <strong>
+                                {entry.ingredient}
+                                {entry.brandVariety ? ` · ${entry.brandVariety}` : ""}
+                              </strong>
+                              <span>
+                                {formatQuantity(entry.quantity)} {entry.unit ?? ""} ·{" "}
+                                {entry.locationName ?? "No location"}
+                              </span>
+                            </button>
+                          ))}
+                      </div>
                     </div>
-                  ))}
+                  )}
+                  {payload.shoppingDecisions.length > 0 && (
+                    <div className="plan-shopping-decisions">
+                      <strong>Reviewed ingredient decisions</strong>
+                      {payload.shoppingDecisions.map((decision) => {
+                        const linkedInventory = decision.inventoryEntryId
+                          ? inventory.find((entry) => entry.id === decision.inventoryEntryId)
+                          : null;
+                        const sourceLine = payload.shopping.find(
+                          (line) => line.requirementKey === decision.requirementKey,
+                        ) ?? {
+                          id: `decision-${decision.requirementKey}`,
+                          item: decision.item,
+                          requirementKey: decision.requirementKey,
+                          category: linkedInventory?.category ?? "Other",
+                          quantity: null,
+                          unit: decision.unit,
+                          reason: "Reviewed ingredient decision.",
+                          mealIds: decision.mealIds,
+                          suggestedStore: null,
+                          saleItemId: null,
+                          estimatedPrice: null,
+                        };
+                        return (
+                          <div className="plan-shopping-decision" key={decision.requirementKey}>
+                            <span>
+                              <strong>{decision.item}</strong>
+                              {decision.action === "inventory"
+                                ? ` covered by ${linkedInventory?.ingredient ?? "unavailable inventory"}${linkedInventory?.brandVariety ? ` · ${linkedInventory.brandVariety}` : ""}`
+                                : " manually excluded from this draft"}
+                            </span>
+                            {decision.action === "inventory" && (
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() =>
+                                  setInventorySearch({ line: sourceLine, query: decision.item })
+                                }
+                              >
+                                Change
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="danger-link"
+                              onClick={() => undoShoppingDecision(decision.requirementKey)}
+                            >
+                              Undo
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div className="form-actions">
                     <button
                       type="button"
@@ -1601,6 +1785,24 @@ export function WeeklyPlanner({
                     </ul>
                   ) : (
                     <p className="muted">No additional shopping proposed.</p>
+                  )}
+                  {payload.shoppingDecisions.length > 0 && (
+                    <div className="plan-shopping-decisions">
+                      <strong>Reviewed ingredient decisions</strong>
+                      {payload.shoppingDecisions.map((decision) => {
+                        const linkedInventory = decision.inventoryEntryId
+                          ? inventory.find((entry) => entry.id === decision.inventoryEntryId)
+                          : null;
+                        return (
+                          <span key={decision.requirementKey}>
+                            <strong>{decision.item}</strong>
+                            {decision.action === "inventory"
+                              ? ` covered by ${linkedInventory?.ingredient ?? "unavailable inventory"}${linkedInventory?.brandVariety ? ` · ${linkedInventory.brandVariety}` : ""}`
+                              : " manually excluded from this draft"}
+                          </span>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               )}

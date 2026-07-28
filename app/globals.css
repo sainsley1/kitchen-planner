@@ -2420,9 +2420,55 @@ button:disabled {
 }
 .plan-shopping-edit {
   display: grid;
-  grid-template-columns: 1.1fr 0.7fr 100px 100px 1.5fr auto;
+  grid-template-columns: 1.1fr 0.7fr 100px 100px 1.5fr auto auto;
   gap: 8px;
   align-items: center;
+}
+.plan-inventory-association,
+.plan-shopping-decisions {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid #bfd0ca;
+  border-radius: 11px;
+  background: var(--green-pale);
+}
+.plan-inventory-association > input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #bfd0ca;
+  border-radius: 8px;
+  background: #fff;
+}
+.inventory-association-results {
+  display: grid;
+  gap: 6px;
+  max-height: 280px;
+  overflow: auto;
+}
+.inventory-association-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-align: left;
+  background: #fff;
+}
+.inventory-association-option span,
+.plan-shopping-decisions span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.plan-shopping-decision {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.plan-shopping-decision > span {
+  margin-right: auto;
 }
 .plan-exception-edit {
   display: grid;
