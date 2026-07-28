@@ -1,0 +1,17 @@
+node_modules/
+.next/
+coverage/
+db/
+postgres/
+uploads/
+backups/
+package-lock.json
+*.sql
+*.dump
+*.sql.gz
+*.xlsx
+*.xls
+*.csv
+*.zip
+*.tar
+*.tar.gz

@@ -1,0 +1,100 @@
+name: kitchen-planner
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: kitchen-planner-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kitchen_planner}
+      POSTGRES_USER: ${POSTGRES_USER:-kitchen_planner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      TZ: ${APP_TIME_ZONE:-America/Vancouver}
+    volumes:
+      - ${APPDATA_ROOT:-/mnt/user/appdata}/kitchen-planner/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-kitchen_planner} -d ${POSTGRES_DB:-kitchen_planner}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - kitchen-internal
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kitchen-planner-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      APP_VERSION: ${APP_VERSION:-0.6.4.7}
+      APP_TIME_ZONE: ${APP_TIME_ZONE:-America/Vancouver}
+      TZ: ${APP_TIME_ZONE:-America/Vancouver}
+      PGTZ: ${APP_TIME_ZONE:-America/Vancouver}
+      DEMO_MODE: ${DEMO_MODE:-true}
+      SEED_SYNTHETIC_DATA: ${SEED_SYNTHETIC_DATA:-true}
+      AUTH_MODE: ${AUTH_MODE:-disabled}
+      HOUSEHOLD_SESSION_SECRET: ${HOUSEHOLD_SESSION_SECRET}
+      APP_HOUSEHOLD_NAME: ${APP_HOUSEHOLD_NAME:-Kitchen}
+      HOUSEHOLD_USER_1_NAME: ${HOUSEHOLD_USER_1_NAME:-Owner}
+      HOUSEHOLD_USER_1_PIN: ${HOUSEHOLD_USER_1_PIN:-}
+      HOUSEHOLD_USER_2_NAME: ${HOUSEHOLD_USER_2_NAME:-Member}
+      HOUSEHOLD_USER_2_PIN: ${HOUSEHOLD_USER_2_PIN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_ECONOMY_MODEL: ${OPENAI_ECONOMY_MODEL:-gpt-5.4-mini}
+      OPENAI_ROUTINE_MODEL: ${OPENAI_ROUTINE_MODEL:-gpt-5.4}
+      OPENAI_FALLBACK_MODEL: ${OPENAI_FALLBACK_MODEL:-gpt-5.6-terra}
+      OPENAI_RECONCILIATION_MODEL: ${OPENAI_RECONCILIATION_MODEL:-gpt-5.4}
+      OPENAI_PLANNING_MODEL: ${OPENAI_PLANNING_MODEL:-gpt-5.6-sol}
+      OPENAI_PLANNING_REASONING_EFFORT: ${OPENAI_PLANNING_REASONING_EFFORT:-high}
+      OPENAI_PLANNING_TIMEOUT_MS: ${OPENAI_PLANNING_TIMEOUT_MS:-1800000}
+      OPENAI_ECONOMY_INPUT_USD_PER_M: ${OPENAI_ECONOMY_INPUT_USD_PER_M:-0.75}
+      OPENAI_ECONOMY_CACHED_INPUT_USD_PER_M: ${OPENAI_ECONOMY_CACHED_INPUT_USD_PER_M:-0.075}
+      OPENAI_ECONOMY_OUTPUT_USD_PER_M: ${OPENAI_ECONOMY_OUTPUT_USD_PER_M:-4.5}
+      OPENAI_ROUTINE_INPUT_USD_PER_M: ${OPENAI_ROUTINE_INPUT_USD_PER_M:-2.5}
+      OPENAI_ROUTINE_CACHED_INPUT_USD_PER_M: ${OPENAI_ROUTINE_CACHED_INPUT_USD_PER_M:-0.25}
+      OPENAI_ROUTINE_OUTPUT_USD_PER_M: ${OPENAI_ROUTINE_OUTPUT_USD_PER_M:-15}
+      OPENAI_FALLBACK_INPUT_USD_PER_M: ${OPENAI_FALLBACK_INPUT_USD_PER_M:-2.5}
+      OPENAI_FALLBACK_CACHED_INPUT_USD_PER_M: ${OPENAI_FALLBACK_CACHED_INPUT_USD_PER_M:-0.25}
+      OPENAI_FALLBACK_OUTPUT_USD_PER_M: ${OPENAI_FALLBACK_OUTPUT_USD_PER_M:-15}
+      OPENAI_PLANNING_INPUT_USD_PER_M: ${OPENAI_PLANNING_INPUT_USD_PER_M:-5}
+      OPENAI_PLANNING_CACHED_INPUT_USD_PER_M: ${OPENAI_PLANNING_CACHED_INPUT_USD_PER_M:-0.5}
+      OPENAI_PLANNING_OUTPUT_USD_PER_M: ${OPENAI_PLANNING_OUTPUT_USD_PER_M:-30}
+    ports:
+      - "${APP_PORT:-8790}:3000"
+    volumes:
+      - ${APPDATA_ROOT:-/mnt/user/appdata}/kitchen-planner/uploads:/app/uploads
+    networks:
+      - kitchen-lan
+      - kitchen-internal
+    healthcheck:
+      test: ["CMD", "node", "scripts/healthcheck.mjs"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  kitchen-lan:
+    driver: bridge
+  kitchen-internal:
+    driver: bridge
+    internal: true

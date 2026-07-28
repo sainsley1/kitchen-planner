@@ -1,0 +1,35 @@
+# Dependencies and generated build/test output
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+*.log
+
+# Secrets and local environment overrides
+.env
+.env.*
+!.env.example
+
+# Runtime and household data
+db/
+postgres/
+uploads/
+backups/
+*.dump
+*.sql.gz
+*.bak
+
+# User-supplied and release artifacts
+*.xlsx
+*.xls
+*.csv
+*.zip
+*.tar
+*.tar.gz
+
+# Local editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

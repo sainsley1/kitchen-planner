@@ -1,0 +1,46 @@
+{
+  "name": "kitchen-planner",
+  "version": "0.6.4.7",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "validate": "npm run format:check && npm run typecheck && npm run test:run",
+    "smoke": "node scripts/smoke.mjs",
+    "verify:runner": "node scripts/verify-runner-deps.mjs",
+    "verify:runtime": "node scripts/verify-runtime.mjs",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:seed": "node scripts/seed.mjs"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "fast-xml-parser": "^5.10.0",
+    "fflate": "^0.8.3",
+    "next": "16.2.10",
+    "openai": "^6.47.0",
+    "pg": "8.22.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.15.5",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "exceljs": "^4.4.0",
+    "prettier": "3.9.6",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.10"
+  }
+}
