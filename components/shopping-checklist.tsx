@@ -8,10 +8,7 @@ export function ShoppingChecklist({ initialItems }: { initialItems: DemoShopping
   return (
     <div className="shopping-list">
       {items.map((item) => (
-        <label
-          className={item.purchased ? "shopping-row purchased" : "shopping-row"}
-          key={item.id}
-        >
+        <label className={item.purchased ? "shopping-row purchased" : "shopping-row"} key={item.id}>
           <input
             type="checkbox"
             checked={item.purchased}

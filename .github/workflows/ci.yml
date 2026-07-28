@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Check TypeScript
+        run: npm run typecheck
+
+      - name: Run complete test suite
+        run: npm run test:run
+
+      - name: Check release-version consistency
+        run: npx vitest run tests/release-version.test.ts
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Check runtime dependencies
+        run: npm run verify:runtime
+
+      - name: Check standalone runner dependencies
+        run: npm run verify:runner

@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  demoFeedback,
-  demoInventory,
-  demoMeals,
-  demoShopping,
-} from "../lib/demo-data";
+import { demoFeedback, demoInventory, demoMeals, demoShopping } from "../lib/demo-data";
 
 describe("synthetic Phase 2 fixtures", () => {
   it("contains no household names or workbook records", () => {

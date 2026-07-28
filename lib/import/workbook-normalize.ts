@@ -12,7 +12,11 @@ export const importDestinations = [
 
 export type ImportDestination = (typeof importDestinations)[number];
 export type ImportAction =
-  "import" | "skip" | "import_unscheduled" | "use_existing" | "replace_existing";
+  | "import"
+  | "skip"
+  | "import_unscheduled"
+  | "use_existing"
+  | "replace_existing";
 export type NormalizedImportRow = Omit<StagedWorkbookRow, "normalized"> & {
   destinationType: ImportDestination | null;
   normalized: Record<string, unknown> | null;
