@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { demoFeedback, demoInventory, demoMeals, demoShopping } from "../lib/demo-data";
+import {
+  demoFeedback,
+  demoInventory,
+  demoMeals,
+  demoShopping,
+} from "../lib/demo-data";
 
 describe("synthetic Phase 2 fixtures", () => {
   it("contains no household names or workbook records", () => {
-    const serialized = JSON.stringify({ demoFeedback, demoInventory, demoMeals, demoShopping }).toLowerCase();
+    const serialized = JSON.stringify({
+      demoFeedback,
+      demoInventory,
+      demoMeals,
+      demoShopping,
+    }).toLowerCase();
     expect(serialized).not.toContain("seth");
     expect(serialized).not.toContain("nancy");
     expect(serialized).not.toContain("sausage pasta");
