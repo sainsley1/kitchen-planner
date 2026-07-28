@@ -49,9 +49,7 @@ export function InventoryBrowser({ items }: { items: DemoInventoryItem[] }) {
               <strong>{item.quantity}</strong>
               <span>{item.location}</span>
             </div>
-            <span
-              className={`priority priority-${item.priority.toLowerCase().replace(" ", "-")}`}
-            >
+            <span className={`priority priority-${item.priority.toLowerCase().replace(" ", "-")}`}>
               {item.priority}
             </span>
           </article>

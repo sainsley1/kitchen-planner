@@ -1,9 +1,4 @@
-import type {
-  DemoFeedback,
-  DemoInventoryItem,
-  DemoMeal,
-  DemoShoppingItem,
-} from "./types";
+import type { DemoFeedback, DemoInventoryItem, DemoMeal, DemoShoppingItem } from "./types";
 
 export const demoInventory: DemoInventoryItem[] = [
   {
