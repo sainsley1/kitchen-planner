@@ -590,6 +590,95 @@ describe("premium weekly planning", () => {
     await database.close();
   }, 30_000);
 
+  it("persists manual shopping exclusions and inventory associations through repeated verification", async () => {
+    const database = await createDatabase();
+    state.responses.push({
+      value: validPlan(),
+      usage: usage("gpt-5.6-terra", "medium"),
+      sources: [],
+    });
+    const queued = await queueWeeklyPlan(actor, request());
+    const finished = await processWeeklyPlanJob(queued.id);
+    const generated = (await listWeeklyPlans(actor.householdId)).find(
+      (plan) => plan.id === finished.planId,
+    )!;
+    const automatic = generated.payload.shopping.find(
+      (line) => line.item === "Avocado" && line.requirementKey,
+    )!;
+
+    const removed = structuredClone(generated.payload);
+    removed.shopping = removed.shopping.filter((line) => line.id !== automatic.id);
+    const excluded = await reviseWeeklyPlan(actor, generated.id, { payload: removed });
+    expect(excluded.payload.shopping.some((line) => line.item === "Avocado")).toBe(false);
+    expect(excluded.payload.shoppingDecisions).toContainEqual(
+      expect.objectContaining({
+        requirementKey: automatic.requirementKey,
+        action: "exclude",
+        inventoryEntryId: null,
+      }),
+    );
+    const excludedAgain = await reviseWeeklyPlan(actor, generated.id, {
+      payload: structuredClone(excluded.payload),
+    });
+    expect(excludedAgain.payload.shopping.some((line) => line.item === "Avocado")).toBe(false);
+
+    const undo = structuredClone(excludedAgain.payload);
+    undo.shoppingDecisions = [];
+    const returned = await reviseWeeklyPlan(actor, generated.id, { payload: undo });
+    const returnedRequirement = returned.payload.shopping.find(
+      (line) => line.requirementKey === automatic.requirementKey,
+    )!;
+    expect(returnedRequirement).toMatchObject({ item: "Avocado", quantity: 1, unit: "each" });
+
+    const quantityBefore = (
+      await database.query<{ quantity: string }>(
+        `SELECT quantity::text AS quantity FROM inventory_entries WHERE id=$1`,
+        [avocadoInventoryId],
+      )
+    ).rows[0].quantity;
+    const associated = structuredClone(returned.payload);
+    associated.shoppingDecisions = [
+      {
+        requirementKey: returnedRequirement.requirementKey!,
+        item: returnedRequirement.item,
+        unit: returnedRequirement.unit,
+        mealIds: returnedRequirement.mealIds,
+        action: "inventory",
+        inventoryEntryId: avocadoInventoryId,
+      },
+    ];
+    const linked = await reviseWeeklyPlan(actor, generated.id, { payload: associated });
+    expect(linked.payload.shopping.some((line) => line.item === "Avocado")).toBe(false);
+    expect(linked.payload.shoppingDecisions).toContainEqual(
+      expect.objectContaining({
+        action: "inventory",
+        inventoryEntryId: avocadoInventoryId,
+      }),
+    );
+    const linkedAgain = await reviseWeeklyPlan(actor, generated.id, {
+      payload: structuredClone(linked.payload),
+    });
+    expect(linkedAgain.payload.shopping.some((line) => line.item === "Avocado")).toBe(false);
+    const undoAssociation = structuredClone(linkedAgain.payload);
+    undoAssociation.shoppingDecisions = [];
+    const returnedAfterAssociation = await reviseWeeklyPlan(actor, generated.id, {
+      payload: undoAssociation,
+    });
+    expect(
+      returnedAfterAssociation.payload.shopping.find(
+        (line) => line.requirementKey === automatic.requirementKey,
+      ),
+    ).toMatchObject({ item: "Avocado", quantity: 1, unit: "each" });
+    const quantityAfter = (
+      await database.query<{ quantity: string }>(
+        `SELECT quantity::text AS quantity FROM inventory_entries WHERE id=$1`,
+        [avocadoInventoryId],
+      )
+    ).rows[0].quantity;
+    expect(quantityAfter).toBe(quantityBefore);
+    await database.close();
+  }, 30_000);
+
   it("blocks missing coverage, overlapping assignments, unsafe workplace food, excessive prep, and insufficient leftovers", () => {
     const plan = validPlan();
     plan.meals = plan.meals.filter((entry) => entry.mealType !== "breakfast");
@@ -637,6 +726,90 @@ describe("premium weekly planning", () => {
     expect(validateWeeklyPlan(plan, excluded, context()).map((issue) => issue.code)).toEqual(
       expect.arrayContaining(["unexpected_snack", "unexpected_dessert"]),
     );
+  });
+
+  it("warns without blocking when a dinner omits one member but still blocks an empty slot", () => {
+    const partial = validPlan();
+    partial.meals[2] = {
+      ...partial.meals[2],
+      assignedUserId: ownerId,
+      servings: 1,
+      plannedYield: "1 serving",
+    };
+    const partialIssues = validateWeeklyPlan(partial, request(), context());
+    expect(partialIssues).toContainEqual(
+      expect.objectContaining({
+        severity: "warning",
+        code: "incomplete_household_coverage",
+      }),
+    );
+    expect(
+      partialIssues.filter(
+        (issue) => issue.severity === "error" && issue.code === "missing_meal_slot",
+      ),
+    ).toEqual([]);
+
+    partial.meals = partial.meals.filter((entry) => entry.mealType !== "dinner");
+    expect(validateWeeklyPlan(partial, request(), context())).toContainEqual(
+      expect.objectContaining({ severity: "error", code: "missing_meal_slot" }),
+    );
+  });
+
+  it("canonicalizes valid structured leftovers and reports missing sources accurately", () => {
+    const plan = validPlan();
+    plan.meals[2] = {
+      ...plan.meals[2],
+      leftoverServings: 2,
+    };
+    const leftover = meal("leftover-dinner", "dinner", "Mac and cheese with broccoli leftovers", {
+      mealDate: "2099-07-19",
+      preparationBasis: "guided_method",
+      leftoverFromMealId: "dinner",
+      ingredientRequirements: [],
+      servings: 2,
+    });
+    plan.meals.push(leftover);
+    const twoDayRequest = { ...request(), endDate: "2099-07-19" };
+    const reconciled = reconcileWeeklyPlanShopping(plan, context()).plan;
+    expect(reconciled.meals.find((entry) => entry.id === leftover.id)).toMatchObject({
+      preparationBasis: "leftover",
+      leftoverFromMealId: "dinner",
+    });
+    expect(
+      validateWeeklyPlan(reconciled, twoDayRequest, context()).filter((issue) =>
+        [
+          "leftover_basis",
+          "missing_leftover_source",
+          "leftover_order",
+          "leftover_shortfall",
+        ].includes(issue.code),
+      ),
+    ).toEqual([]);
+
+    const invalid = structuredClone(reconciled);
+    invalid.meals.find((entry) => entry.id === leftover.id)!.leftoverFromMealId = "missing";
+    expect(validateWeeklyPlan(invalid, twoDayRequest, context())).toContainEqual(
+      expect.objectContaining({ severity: "error", code: "missing_leftover_source" }),
+    );
+  });
+
+  it("normalizes duplicate prep ids and reports each raw duplicate id only once", () => {
+    const plan = validPlan();
+    plan.prepTasks = [
+      ...plan.prepTasks,
+      { ...plan.prepTasks[0], task: "Second salsa task." },
+      { ...plan.prepTasks[0], task: "Third salsa task." },
+    ];
+    expect(
+      validateWeeklyPlan(plan, request(), context()).filter(
+        (issue) => issue.code === "duplicate_prep_id",
+      ),
+    ).toHaveLength(1);
+    const normalized = reconcileWeeklyPlanShopping(plan, context()).plan;
+    expect(new Set(normalized.prepTasks.map((task) => task.id)).size).toBe(
+      normalized.prepTasks.length,
+    );
+    expect(normalized.prepTasks).toHaveLength(3);
   });
 
   it("rounds countable same-unit inventory shortfalls and adds measured shortages exactly", () => {

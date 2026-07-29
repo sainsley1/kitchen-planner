@@ -1,7 +1,12 @@
 import fs from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { weeklyPlanMealSchema, weeklyPlanSchema, type WeeklyPlan } from "../lib/ai/contracts";
+import {
+  weeklyPlanMealSchema,
+  weeklyPlanRefinementSchema,
+  weeklyPlanSchema,
+  type WeeklyPlan,
+} from "../lib/ai/contracts";
 
 const state = vi.hoisted(() => ({
   pool: null as unknown,
@@ -48,8 +53,10 @@ vi.mock("@/lib/ai/provider", () => ({
 import {
   applyWeeklyPlanSuggestion,
   createWeeklyPlanSuggestion,
+  mergeRefinement,
   refineWeeklyPlan,
 } from "../lib/services/weekly-refinement";
+import { normalizeWeeklyPlanMealLinkedRecords } from "../lib/services/weekly-shopping";
 
 const householdId = "22222222-2222-4222-8222-222222222222";
 const ownerId = "99999999-9999-4999-8999-999999999999";
@@ -201,6 +208,114 @@ describe("targeted weekly-plan refinement", () => {
     state.responses = [];
     state.calls = [];
   });
+  it("reconciles repeated meal regeneration prep tasks while preserving unrelated tasks", () => {
+    let current = plan();
+    current.prepTasks = [
+      {
+        id: "obsolete-dinner",
+        task: "Old dinner prep.",
+        mealDate: "2026-07-18",
+        minutes: 20,
+        mealIds: ["dinner"],
+      },
+      {
+        id: "shared-prep",
+        task: "Shared prep that still supports lunch.",
+        mealDate: "2026-07-18",
+        minutes: 15,
+        mealIds: ["lunch", "dinner"],
+      },
+      {
+        id: "unrelated-lunch",
+        task: "Lunch-only prep.",
+        mealDate: "2026-07-18",
+        minutes: 10,
+        mealIds: ["lunch"],
+      },
+      {
+        id: "obsolete-dinner",
+        task: "Pre-existing duplicate dinner prep.",
+        mealDate: "2026-07-18",
+        minutes: 5,
+        mealIds: ["dinner"],
+      },
+    ];
+    const replacement = weeklyPlanRefinementSchema.parse({
+      summary: "Regenerated dinner.",
+      replacementMeals: [meal("dinner", "dinner", "Regenerated dinner")],
+      replacementShopping: [],
+      replacementPrepTasks: [
+        {
+          id: "shared-prep",
+          task: "Current regenerated dinner prep.",
+          mealDate: "2026-07-18",
+          minutes: 12,
+          mealIds: ["dinner"],
+        },
+      ],
+      warnings: [],
+    });
+
+    for (let repetition = 0; repetition < 4; repetition += 1)
+      current = normalizeWeeklyPlanMealLinkedRecords(
+        mergeRefinement(current, new Set(["dinner"]), replacement),
+      );
+
+    expect(current.prepTasks.filter((task) => task.mealIds.includes("dinner"))).toEqual([
+      expect.objectContaining({ task: "Current regenerated dinner prep.", mealIds: ["dinner"] }),
+    ]);
+    expect(current.prepTasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "shared-prep",
+          task: "Shared prep that still supports lunch.",
+          mealIds: ["lunch"],
+        }),
+        expect.objectContaining({ id: "unrelated-lunch", mealIds: ["lunch"] }),
+      ]),
+    );
+    expect(current.prepTasks.some((task) => task.task.includes("Old dinner"))).toBe(false);
+    expect(current.prepTasks.some((task) => task.task.includes("Pre-existing duplicate"))).toBe(
+      false,
+    );
+    expect(new Set(current.prepTasks.map((task) => task.id)).size).toBe(current.prepTasks.length);
+  });
+
+  it("preserves structured leftover links during individual regeneration", () => {
+    const current = plan();
+    current.meals[0] = {
+      ...current.meals[0],
+      mealDate: "2026-07-17",
+      leftoverServings: 2,
+    };
+    current.meals[1] = {
+      ...current.meals[1],
+      dish: "Leftover grilled cheese",
+      preparationBasis: "leftover",
+      preparationMethod: null,
+      ingredientRequirements: [],
+      leftoverFromMealId: "lunch",
+    };
+    const replacement = weeklyPlanRefinementSchema.parse({
+      summary: "Keep the structured leftovers.",
+      replacementMeals: [
+        {
+          ...current.meals[1],
+          leftoverFromMealId: null,
+          preparationBasis: "leftover",
+        },
+      ],
+      replacementShopping: [],
+      replacementPrepTasks: [],
+      warnings: [],
+    });
+    const merged = mergeRefinement(current, new Set(["dinner"]), replacement);
+    expect(merged.meals[1]).toMatchObject({
+      preparationBasis: "leftover",
+      leftoverFromMealId: "lunch",
+    });
+  });
+
   it("routes a meal refinement to GPT-5.4, preserves other meals, and applies one stored alternative as a described revision", async () => {
     const { db, id } = await database();
     const replacement = meal("dinner", "dinner", "Thai prawn curry");

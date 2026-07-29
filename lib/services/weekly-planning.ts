@@ -34,6 +34,7 @@ import {
   hasSameUnitShoppingCoverage,
   normalizedShoppingUnit,
   reconcileWeeklyPlanShopping,
+  shoppingRequirementKey,
 } from "@/lib/services/weekly-shopping";
 import { boundWeeklyPlanWarnings } from "@/lib/services/weekly-warnings";
 
@@ -58,8 +59,28 @@ const REVIEWABLE_SHOPPING_FIELDS = ["item", "category", "quantity", "unit", "rea
 
 function preserveReviewedShoppingEdits(current: WeeklyPlan, edited: WeeklyPlan): WeeklyPlan {
   const currentLines = new Map(current.shopping.map((line) => [line.id, line]));
+  const decisions = new Map(
+    edited.shoppingDecisions.map((decision) => [decision.requirementKey, decision]),
+  );
+  const submittedLineIds = new Set(edited.shopping.map((line) => line.id));
+  for (const line of current.shopping) {
+    const automatic =
+      line.id.startsWith(AUTO_REQUIREMENT_PREFIX) || line.id.startsWith(AUTO_SHORTFALL_PREFIX);
+    if (!automatic || submittedLineIds.has(line.id)) continue;
+    const requirementKey = line.requirementKey ?? shoppingRequirementKey(line.item, line.unit);
+    if (!decisions.has(requirementKey))
+      decisions.set(requirementKey, {
+        requirementKey,
+        item: line.item,
+        unit: line.unit,
+        mealIds: [...line.mealIds],
+        action: "exclude",
+        inventoryEntryId: null,
+      });
+  }
   return {
     ...edited,
+    shoppingDecisions: [...decisions.values()],
     shopping: edited.shopping.map((line) => {
       const automatic =
         line.id.startsWith(AUTO_REQUIREMENT_PREFIX) || line.id.startsWith(AUTO_SHORTFALL_PREFIX);
@@ -785,13 +806,19 @@ export function validateWeeklyPlan(
     const covered = new Set(
       candidates.map((meal) => meal.assignedUserId).filter((id): id is string => Boolean(id)),
     );
-    if (
-      !household &&
-      context.users.some((user) => !covered.has(user.id) && !exceptionUsers.has(user.id))
-    )
+    const missingUsers = context.users.filter(
+      (user) => !covered.has(user.id) && !exceptionUsers.has(user.id),
+    );
+    if (!household && !candidates.length && missingUsers.length)
       add(
         "error",
         "missing_meal_slot",
+        `${slot.date} ${slot.mealType} has no meal assigned to any household member.`,
+      );
+    else if (!household && missingUsers.length)
+      add(
+        "warning",
+        "incomplete_household_coverage",
         `${slot.date} ${slot.mealType} does not cover every household member.`,
       );
     if (household && candidates.length > 1)
@@ -866,6 +893,29 @@ export function validateWeeklyPlan(
       );
   }
   const knownMealIds = new Set(plan.meals.map((meal) => meal.id));
+  for (const decision of plan.shoppingDecisions) {
+    for (const mealId of decision.mealIds)
+      if (!knownMealIds.has(mealId))
+        add(
+          "error",
+          "unknown_shopping_decision_meal",
+          `${decision.item} has a shopping decision for an unknown meal id ${mealId}.`,
+        );
+    if (decision.action === "inventory") {
+      if (!decision.inventoryEntryId)
+        add(
+          "error",
+          "missing_shopping_inventory",
+          `${decision.item} is marked as inventory-covered without a selected inventory item.`,
+        );
+      else if (!inventory.has(decision.inventoryEntryId))
+        add(
+          "error",
+          "unknown_shopping_inventory",
+          `${decision.item} is linked to inventory that is no longer available.`,
+        );
+    }
+  }
   for (const item of plan.shopping) {
     for (const mealId of item.mealIds)
       if (!knownMealIds.has(mealId))
@@ -916,9 +966,12 @@ export function validateWeeklyPlan(
       );
   }
   const prepIds = new Set<string>();
+  const reportedDuplicatePrepIds = new Set<string>();
   for (const task of plan.prepTasks) {
-    if (prepIds.has(task.id))
+    if (prepIds.has(task.id) && !reportedDuplicatePrepIds.has(task.id)) {
       add("error", "duplicate_prep_id", `Prep-task id ${task.id} is duplicated.`);
+      reportedDuplicatePrepIds.add(task.id);
+    }
     prepIds.add(task.id);
     if (task.mealDate < request.startDate || task.mealDate > request.endDate)
       add(

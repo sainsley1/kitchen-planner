@@ -150,6 +150,9 @@ export function normalizedShoppingUnit(value: string | null | undefined) {
   const raw = (value ?? "").toLocaleLowerCase().trim().replace(/\.$/, "");
   return UNIT_ALIASES[raw] ?? raw;
 }
+export function shoppingRequirementKey(item: string, unit: string | null | undefined) {
+  return `${normalizedName(item)}|${normalizedShoppingUnit(unit) || "unknown"}`;
+}
 export function ingredientNamesMatch(left: string, right: string) {
   const a = normalizedName(left);
   const b = normalizedName(right);
@@ -179,6 +182,52 @@ const namesMatch = ingredientNamesMatch;
 function roundedShortfall(value: number, unitKey: string) {
   const precise = Number(value.toFixed(3));
   return DISCRETE_UNITS.has(unitKey) ? Math.ceil(precise) : precise;
+}
+
+export function normalizeWeeklyPlanMealLinkedRecords(plan: WeeklyPlan): WeeklyPlan {
+  const prepTasks: WeeklyPlan["prepTasks"] = [];
+  const usedPrepIds = new Set<string>();
+  for (const task of plan.prepTasks) {
+    if (!usedPrepIds.has(task.id)) {
+      prepTasks.push({ ...task, mealIds: [...new Set(task.mealIds)] });
+      usedPrepIds.add(task.id);
+      continue;
+    }
+    const identical = prepTasks.find(
+      (entry) =>
+        entry.id === task.id &&
+        entry.task === task.task &&
+        entry.mealDate === task.mealDate &&
+        entry.minutes === task.minutes,
+    );
+    if (identical) {
+      identical.mealIds = [...new Set([...identical.mealIds, ...task.mealIds])];
+      continue;
+    }
+    let sequence = 2;
+    let id = "";
+    do {
+      const suffix = `-${sequence++}`;
+      id = `${task.id.slice(0, 100 - suffix.length)}${suffix}`;
+    } while (usedPrepIds.has(id));
+    prepTasks.push({ ...task, id, mealIds: [...new Set(task.mealIds)] });
+    usedPrepIds.add(id);
+  }
+  const shoppingDecisions = new Map<string, WeeklyPlan["shoppingDecisions"][number]>();
+  for (const decision of plan.shoppingDecisions)
+    shoppingDecisions.set(decision.requirementKey, {
+      ...decision,
+      mealIds: [...new Set(decision.mealIds)],
+      inventoryEntryId: decision.action === "inventory" ? decision.inventoryEntryId : null,
+    });
+  return {
+    ...plan,
+    meals: plan.meals.map((meal) =>
+      meal.leftoverFromMealId ? { ...meal, preparationBasis: "leftover" } : meal,
+    ),
+    shoppingDecisions: [...shoppingDecisions.values()],
+    prepTasks,
+  };
 }
 function finiteQuantity(value: number | string | null | undefined) {
   const parsed = value == null ? NaN : Number(value);
@@ -381,6 +430,7 @@ function reconcileInventoryUseShortfalls(
   context: PlanningContext,
 ): { plan: WeeklyPlan; changes: ShoppingShortfallChange[] } {
   const inventory = new Map(context.inventory.map((item) => [item.id, item]));
+  const decisions = new Set(plan.shoppingDecisions.map((decision) => decision.requirementKey));
   const useByEntry = new Map<
     string,
     { quantity: number; unit: string; unitKey: string; mealIds: Set<string>; ambiguous: boolean }
@@ -424,7 +474,7 @@ function reconcileInventoryUseShortfalls(
       use.quantity <= available
     )
       continue;
-    const key = `${normalizedName(item.ingredient)}|${use.unitKey}`;
+    const key = shoppingRequirementKey(item.ingredient, use.unitKey);
     const shortage = roundedShortfall(use.quantity - available, use.unitKey);
     if (shortage <= 0) continue;
     const current = grouped.get(key);
@@ -453,6 +503,7 @@ function reconcileInventoryUseShortfalls(
     .map((line) => ({ ...line, mealIds: [...line.mealIds] }));
   const changes: ShoppingShortfallChange[] = [];
   for (const shortage of grouped.values()) {
+    if (decisions.has(shoppingRequirementKey(shortage.ingredient, shortage.unitKey))) continue;
     if (
       context.shopping.some((line) =>
         lineCovers(line, shortage.ingredient, shortage.unitKey, shortage.quantity),
@@ -493,6 +544,7 @@ function reconcileInventoryUseShortfalls(
     shopping.push({
       id: `${AUTO_SHORTFALL_PREFIX}${firstInventoryId}`,
       item: shortage.ingredient,
+      requirementKey: shoppingRequirementKey(shortage.ingredient, shortage.unitKey),
       category: shortage.category,
       quantity: shortage.quantity,
       unit: shortage.unit,
@@ -518,13 +570,14 @@ function reconcileIngredientRequirements(
   plan: WeeklyPlan,
   context: PlanningContext,
 ): { plan: WeeklyPlan; changes: ShoppingShortfallChange[] } {
+  const decisions = new Set(plan.shoppingDecisions.map((decision) => decision.requirementKey));
   const grouped = new Map<string, RequirementGroup>();
   for (const meal of plan.meals) {
     if (meal.preparationBasis === "leftover") continue;
     for (const requirement of meal.ingredientRequirements) {
       if (requirement.optional) continue;
       const unitKey = normalizedShoppingUnit(requirement.unit);
-      const key = `${normalizedName(requirement.item)}|${unitKey || "unknown"}`;
+      const key = shoppingRequirementKey(requirement.item, unitKey);
       const current = grouped.get(key) ?? {
         item: requirement.item,
         category: requirement.category,
@@ -557,6 +610,7 @@ function reconcileIngredientRequirements(
   const confirmationWarnings: string[] = [];
   const changes: ShoppingShortfallChange[] = [];
   for (const requirement of grouped.values()) {
+    if (decisions.has(shoppingRequirementKey(requirement.item, requirement.unitKey))) continue;
     const sale =
       [...requirement.saleItemIds]
         .map((id) => context.activeSales.find((entry) => entry.id === id))
@@ -588,6 +642,7 @@ function reconcileIngredientRequirements(
           100,
         ),
         item: requirement.item,
+        requirementKey: shoppingRequirementKey(requirement.item, requirement.unitKey),
         category: requirement.category,
         quantity: null,
         unit: requirement.unit,
@@ -690,6 +745,7 @@ function reconcileIngredientRequirements(
         100,
       ),
       item: requirement.item,
+      requirementKey: shoppingRequirementKey(requirement.item, requirement.unitKey),
       category: requirement.category,
       quantity: shortfall,
       unit: requirement.unit,
@@ -793,7 +849,8 @@ export function reconcileWeeklyPlanShopping(
   plan: WeeklyPlan,
   context: PlanningContext,
 ): { plan: WeeklyPlan; changes: ShoppingShortfallChange[] } {
-  const enriched = enrichMealRequirements(plan, context);
+  const normalized = normalizeWeeklyPlanMealLinkedRecords(plan);
+  const enriched = enrichMealRequirements(normalized, context);
   const requirements = reconcileIngredientRequirements(enriched, context);
   const inventory = reconcileInventoryUseShortfalls(requirements.plan, context);
   const scored = {

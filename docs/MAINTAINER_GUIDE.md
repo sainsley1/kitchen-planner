@@ -1,6 +1,6 @@
 # Kitchen Planner Maintainer Guide
 
-Version covered: 0.6.5.0
+Version covered: 0.6.5.1
 Audience: maintainers, future contributors, and coding agents
 
 ## 1. Purpose of this guide
@@ -450,19 +450,24 @@ The server:
 - detects shortages;
 - merges existing shopping coverage;
 - produces automatic shopping lines;
+- honors persisted `shoppingDecisions` before rebuilding automatic requirements;
 - retains sale/store/price provenance;
 - bounds and prioritizes warnings;
 - builds the review scorecard.
 
+Automatic shopping rows are projections, so deleting a row alone used to lose the user's intent when `reconcileWeeklyPlanShopping` rebuilt it. `lib/services/weekly-planning.ts` now converts a removed automatic row into a persisted draft decision, while `lib/services/weekly-shopping.ts` applies explicit exclusion or inventory-association decisions before recreating shortages. The selected inventory record is stored in the weekly-plan JSON payload only; no inventory quantity is changed and no database migration is required.
+
 ### 13.6 Validate
 
-`validateWeeklyPlan` checks coverage, overlap, constraints, preparation completeness, leftovers, inventory, shopping, recipes, sales, and conflicts.
+`validateWeeklyPlan` checks coverage, overlap, constraints, preparation completeness, leftovers, inventory, shopping, recipes, sales, and conflicts. A completely empty requested slot remains blocking; a slot that has a meal but omits one active member is a warning. Duplicate prep-task IDs produce at most one finding per duplicated ID.
 
 Errors block commit. Warnings remain reviewable.
 
 ### 13.7 Revise
 
 Every meaningful edit appends an immutable `weekly_plan_revisions` row. Restoring a previous revision creates a new revision; it never erases intervening history.
+
+Targeted refinement in `lib/services/weekly-refinement.ts` removes the selected meals' links from shopping rows, shopping decisions and prep tasks before replacement records are merged. `normalizeWeeklyPlanMealLinkedRecords` then canonicalizes valid leftover bases, merges or safely renames duplicate prep IDs, and preserves unrelated links. Structured leftover IDs—not display titles—govern source relationships.
 
 ### 13.8 Commit
 
