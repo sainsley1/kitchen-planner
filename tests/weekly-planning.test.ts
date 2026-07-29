@@ -77,6 +77,7 @@ const saltId = "12121212-1212-4121-8121-121212121212";
 const avocadoInventoryId = "13131313-1313-4131-8131-131313131313";
 const yogurtInventoryId = "14141414-1414-4141-8141-141414141414";
 const tahiniInventoryId = "15151515-1515-4151-8151-151515151515";
+const recipeId = "16161616-1616-4161-8161-161616161616";
 const pizzaId = "77777777-7777-4777-8777-777777777777";
 const freezerId = "44444444-4444-4444-8444-444444444444";
 const unscheduledId = "55555555-5555-4555-8555-555555555555";
@@ -791,6 +792,79 @@ describe("premium weekly planning", () => {
     expect(validateWeeklyPlan(invalid, twoDayRequest, context())).toContainEqual(
       expect.objectContaining({ severity: "error", code: "missing_leftover_source" }),
     );
+  });
+
+  it("keeps saved-recipe enrichment subordinate to a structured leftover source", () => {
+    const plan = validPlan();
+    plan.meals[2] = { ...plan.meals[2], leftoverServings: 2 };
+    const leftover = meal("leftover-dinner", "dinner", "Leftover prawn tacos", {
+      mealDate: "2099-07-19",
+      preparationBasis: "saved_recipe",
+      recipeId,
+      recipeTitle: "Prawn tacos",
+      recipeUrl: "https://example.com/prawn-tacos",
+      leftoverFromMealId: "dinner",
+      ingredientRequirements: [],
+      primaryIngredients: [],
+      servings: 2,
+    });
+    plan.meals.push(leftover);
+    const household = context();
+    household.recipes = [
+      {
+        id: recipeId,
+        title: "Prawn tacos",
+        sourceType: "original",
+        sourceUrl: "https://example.com/prawn-tacos",
+        description: "A saved household recipe.",
+        cuisine: "Mexican",
+        mealTypes: ["dinner"],
+        plannedYield: "4 servings",
+        servings: 4,
+        prepMinutes: 20,
+        cookMinutes: 15,
+        ingredients: [
+          { item: "Raw shrimp", quantity: 400, unit: "g", optional: false },
+          { item: "Avocado", quantity: 2, unit: "each", optional: false },
+        ],
+        tags: ["family"],
+        notes: "Serve warm.",
+        favorite: true,
+        recipeStatus: "proven",
+        freezerFriendly: false,
+        leftoverFriendly: true,
+        packedLunchFriendly: false,
+        feedbackCount: 2,
+      },
+    ];
+
+    let reconciled = materializeGeneratedWeeklyPlan(plan);
+    for (let verification = 0; verification < 3; verification += 1)
+      reconciled = reconcileWeeklyPlanShopping(reconciled, household).plan;
+
+    const repaired = reconciled.meals.find((entry) => entry.id === leftover.id)!;
+    expect(repaired).toMatchObject({
+      preparationBasis: "leftover",
+      leftoverFromMealId: "dinner",
+      recipeId,
+      recipeTitle: "Prawn tacos",
+      recipeUrl: "https://example.com/prawn-tacos",
+      primaryIngredients: ["Raw shrimp", "Avocado"],
+    });
+    expect(repaired.ingredientRequirements).toMatchObject([
+      { item: "Raw shrimp", quantity: 400, unit: "g" },
+      { item: "Avocado", quantity: 2, unit: "each" },
+    ]);
+    expect(reconcileWeeklyPlanShopping(reconciled, household).plan).toEqual(reconciled);
+
+    const ordinary = structuredClone(reconciled);
+    const ordinaryMeal = ordinary.meals.find((entry) => entry.id === leftover.id)!;
+    ordinaryMeal.leftoverFromMealId = null;
+    expect(
+      reconcileWeeklyPlanShopping(ordinary, household).plan.meals.find(
+        (entry) => entry.id === leftover.id,
+      ),
+    ).toMatchObject({ preparationBasis: "saved_recipe", recipeId });
   });
 
   it("normalizes duplicate prep ids and reports each raw duplicate id only once", () => {

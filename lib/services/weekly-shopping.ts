@@ -313,7 +313,7 @@ function enrichMealRequirements(plan: WeeklyPlan, context: PlanningContext): Wee
             inventoryEntryId: compatible?.id ?? null,
           };
         });
-        preparationBasis = "saved_recipe";
+        preparationBasis = meal.leftoverFromMealId ? "leftover" : "saved_recipe";
         if (!primaryIngredients.length)
           primaryIngredients = ingredientRequirements
             .filter((entry) => !entry.optional)

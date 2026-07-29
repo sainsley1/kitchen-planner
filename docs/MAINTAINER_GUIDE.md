@@ -1,6 +1,6 @@
 # Kitchen Planner Maintainer Guide
 
-Version covered: 0.6.5.1
+Version covered: 0.6.5.2
 Audience: maintainers, future contributors, and coding agents
 
 ## 1. Purpose of this guide
@@ -468,6 +468,8 @@ Errors block commit. Warnings remain reviewable.
 Every meaningful edit appends an immutable `weekly_plan_revisions` row. Restoring a previous revision creates a new revision; it never erases intervening history.
 
 Targeted refinement in `lib/services/weekly-refinement.ts` removes the selected meals' links from shopping rows, shopping decisions and prep tasks before replacement records are merged. `normalizeWeeklyPlanMealLinkedRecords` then canonicalizes valid leftover bases, merges or safely renames duplicate prep IDs, and preserves unrelated links. Structured leftover IDs—not display titles—govern source relationships.
+
+Generation, targeted regeneration, draft saving, restoration and verification all call `reconcileWeeklyPlanShopping` before validation. Linked-record normalization first marks a structured leftover as `leftover`; saved-recipe enrichment then expands recipe ingredients and metadata. Because a meal can legitimately carry both relationships, enrichment must preserve `leftover` whenever `leftoverFromMealId` is present instead of replacing it with `saved_recipe`. Validation separately resolves the source ID against the plan and reports missing, self/non-earlier or undersupplied sources, so normal reconciliation can repair the basis of an existing draft without a migration while invalid links remain visible.
 
 ### 13.8 Commit
 
