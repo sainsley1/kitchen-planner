@@ -25,7 +25,7 @@ Extract the release directly into the source directory, then configure it:
 ```bash
 mkdir -p /mnt/user/appdata/kitchen-planner/source
 cd /mnt/user/appdata/kitchen-planner/source
-unzip /tmp/Kitchen_Planner_0.6.5.1.zip
+unzip /tmp/Kitchen_Planner_0.6.5.2.zip
 cp .env.example .env
 nano .env
 chmod +x unraid.sh
@@ -36,7 +36,7 @@ Set long hexadecimal values for `POSTGRES_PASSWORD` and `HOUSEHOLD_SESSION_SECRE
 
 Open `http://<unraid-ip>:8790`.
 
-## Upgrade to 0.6.5.1
+## Upgrade to 0.6.5.2
 
 1. Run `./unraid.sh backup` in the current source directory.
 2. If `docker.img` is currently full, reclaim unused build data before attempting another build:
@@ -47,7 +47,7 @@ docker builder prune -f
 docker system df
 ```
 
-3. Extract the 0.6.5.1 ZIP over the source directory. It contains `.env.example`, not `.env`, so existing secrets are preserved.
+3. Extract the 0.6.5.2 ZIP over the source directory. It contains `.env.example`, not `.env`, so existing secrets are preserved.
 4. No `.env` change is required. Add `OPENAI_API_KEY` and model overrides only if they are not already configured.
 5. Run:
 
@@ -57,12 +57,12 @@ chmod +x unraid.sh
 ./unraid.sh status
 ```
 
-The update applies append-only migrations through `0016_multibuy_flyer_price_integrity.sql`; 0.6.5.1 requires no new database migration. It preserves reviewed shopping exclusions and explicit inventory associations during validation, keeps valid structured leftover links, treats partial household coverage as a warning, and reconciles regenerated prep tasks without duplication. AI job/run diagnostics, token usage and errors remain stored. Runtime-data ignore rules are root-anchored so the `lib/db` application source is included in Git while root runtime data remains excluded. The updater keeps the Settings, package, Compose and installer version values aligned, waits for the replacement Kitchen Planner container to report healthy, removes the exact superseded Kitchen Planner image, and prunes only unused Docker build cache older than 24 hours. The previous image is retained when health validation fails. Existing household members, PIN hashes, inventory, preferences, recipes, flyers, drafts, committed meals, shopping, feedback and audit history are preserved; no workbook cutover is required.
+The update applies append-only migrations through `0016_multibuy_flyer_price_integrity.sql`; 0.6.5.2 requires no new database migration. It preserves the leftover preparation basis when a planned leftover is also linked to a saved recipe, and normal verification repairs affected drafts without removing recipe metadata. AI job/run diagnostics, token usage and errors remain stored. Runtime-data ignore rules are root-anchored so the `lib/db` application source is included in Git while root runtime data remains excluded. The updater keeps the Settings, package, Compose and installer version values aligned, waits for the replacement Kitchen Planner container to report healthy, removes the exact superseded Kitchen Planner image, and prunes only unused Docker build cache older than 24 hours. The previous image is retained when health validation fails. Existing household members, PIN hashes, inventory, preferences, recipes, flyers, drafts, committed meals, shopping, feedback and audit history are preserved; no workbook cutover is required and no `.env` change is required.
 
 ## Upgrade from 0.4.0 or 0.3.0
 
 1. Run `./unraid.sh backup` in the current source directory.
-2. Extract the 0.6.5.1 ZIP over the source directory. It contains `.env.example`, not `.env`, so existing secrets are preserved.
+2. Extract the 0.6.5.2 ZIP over the source directory. It contains `.env.example`, not `.env`, so existing secrets are preserved.
 3. Run:
 
 ```bash

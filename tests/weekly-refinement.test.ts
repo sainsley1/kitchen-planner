@@ -292,6 +292,8 @@ describe("targeted weekly-plan refinement", () => {
       ...current.meals[1],
       dish: "Leftover grilled cheese",
       preparationBasis: "leftover",
+      recipeId: "16161616-1616-4161-8161-161616161616",
+      recipeTitle: "Grilled cheese",
       preparationMethod: null,
       ingredientRequirements: [],
       leftoverFromMealId: "lunch",
@@ -313,6 +315,8 @@ describe("targeted weekly-plan refinement", () => {
     expect(merged.meals[1]).toMatchObject({
       preparationBasis: "leftover",
       leftoverFromMealId: "lunch",
+      recipeId: "16161616-1616-4161-8161-161616161616",
+      recipeTitle: "Grilled cheese",
     });
   });
 
