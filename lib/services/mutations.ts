@@ -53,9 +53,14 @@ async function audit(
   reason?: string,
   source: "ui" | "system" = "ui",
 ) {
-  await auditMany(client, actor, action, entityType, [
-    { entityId, beforeState, afterState, reason },
-  ], source);
+  await auditMany(
+    client,
+    actor,
+    action,
+    entityType,
+    [{ entityId, beforeState, afterState, reason }],
+    source,
+  );
 }
 
 async function auditMany(
@@ -78,7 +83,7 @@ async function auditMany(
     const event = events[i];
     const baseIndex = i * 9;
     auditPlaceholders.push(
-      `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}::jsonb, $${baseIndex + 9}::jsonb)`
+      `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}::jsonb, $${baseIndex + 9}::jsonb)`,
     );
 
     auditValues.push(
@@ -90,12 +95,12 @@ async function auditMany(
       event.entityId,
       event.reason ?? null,
       JSON.stringify(event.beforeState ?? null),
-      JSON.stringify(event.afterState ?? null)
+      JSON.stringify(event.afterState ?? null),
     );
   }
   await client.query(
     `INSERT INTO audit_events (household_id, actor_user_id, source, action, entity_type, entity_id, reason, before_state, after_state) VALUES ${auditPlaceholders.join(", ")}`,
-    auditValues
+    auditValues,
   );
 }
 
@@ -856,7 +861,7 @@ export async function bulkUpdateShoppingStatus(
       [actor.householdId, value.status, ...ids],
     );
 
-    const auditEvents = updateResult.rows.map(row => {
+    const auditEvents = updateResult.rows.map((row) => {
       const before = beforeMap.get(row.id);
       const reason =
         value.status === "purchased"
