@@ -842,7 +842,7 @@ export async function registerGroceryShop(
     const shoppingItemIds = value.items.map((i) => i.shoppingItemId);
     const shoppingItemsResult = await client.query(
       `SELECT * FROM shopping_items WHERE id = ANY($1) AND household_id=$2 FOR UPDATE`,
-      [shoppingItemIds, actor.householdId]
+      [shoppingItemIds, actor.householdId],
     );
     const shoppingItemsMap = new Map(shoppingItemsResult.rows.map((r: any) => [r.id, r]));
 
