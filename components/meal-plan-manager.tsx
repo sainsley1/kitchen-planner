@@ -55,6 +55,7 @@ export function MealPlanManager({
 
   async function add(event: FormEvent) {
     event.preventDefault();
+    setError("");
     const response = await fetch("/api/v1/meals", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -78,13 +79,15 @@ export function MealPlanManager({
   }
 
   async function patch(id: string, body: unknown) {
+    setError("");
     const response = await fetch(`/api/v1/meals/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!response.ok)
-      return window.alert((await response.json().catch(() => ({}))).error || "Update failed.");
+    if (!response.ok) {
+      return setError((await response.json().catch(() => ({}))).error || "Update failed.");
+    }
     router.refresh();
   }
 
