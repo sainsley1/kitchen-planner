@@ -734,14 +734,38 @@ export async function bulkUpdateInventory(actor: Actor, ids: string[], input: un
 
 export async function bulkArchiveInventory(actor: Actor, ids: string[], addToShopping = false) {
   const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return { count: 0, items: [] };
+
   return transaction(async (client) => {
+    const beforeResult = await client.query(
+      "SELECT * FROM inventory_entries WHERE id = ANY($1::uuid[]) AND household_id = $2 FOR UPDATE",
+      [uniqueIds, actor.householdId],
+    );
+
+    if (beforeResult.rows.length !== uniqueIds.length) {
+      throw new Error("Record not found");
+    }
+
+    const beforeById = new Map<string, unknown>();
+    for (const row of beforeResult.rows) {
+      beforeById.set(row.id, row);
+    }
+
+    const updateResult = await client.query(
+      "UPDATE inventory_entries SET archived_at=now(),updated_at=now() WHERE id = ANY($1::uuid[]) AND household_id = $2 RETURNING *",
+      [uniqueIds, actor.householdId],
+    );
+
+    const afterById = new Map<string, unknown>();
+    for (const row of updateResult.rows) {
+      afterById.set(row.id, row);
+    }
+
     const archived: unknown[] = [];
     for (const id of uniqueIds) {
-      const before = await getOwned(client, "inventory_entries", id, actor.householdId);
-      const result = await client.query(
-        "UPDATE inventory_entries SET archived_at=now(),updated_at=now() WHERE id=$1 AND household_id=$2 RETURNING *",
-        [id, actor.householdId],
-      );
+      const before = beforeById.get(id);
+      const after = afterById.get(id);
+
       await audit(
         client,
         actor,
@@ -749,18 +773,18 @@ export async function bulkArchiveInventory(actor: Actor, ids: string[], addToSho
         "inventory_entry",
         id,
         before,
-        result.rows[0],
+        after,
         "Removed through bulk inventory action",
       );
       if (addToShopping) {
         await addInventoryToShopping(
           client,
           actor,
-          before,
+          before as Record<string, unknown>,
           "Added automatically during bulk inventory removal",
         );
       }
-      archived.push(result.rows[0]);
+      archived.push(after);
     }
     return { count: archived.length, items: archived };
   });
