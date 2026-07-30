@@ -1011,18 +1011,22 @@ export async function resolveMealInventoryReview(actor: Actor, id: string, input
         (entry: Record<string, unknown>) => [String(entry.inventoryEntryId), entry],
       ),
     );
+    const itemIds = input.items.map((item: { inventoryEntryId: string }) => item.inventoryEntryId);
+    const beforeRows = await client.query(
+      `SELECT * FROM inventory_entries WHERE id=ANY($1::uuid[]) AND household_id=$2 AND archived_at IS NULL FOR UPDATE`,
+      [itemIds, actor.householdId]
+    );
+    const beforeMap = new Map<string, any>(
+      beforeRows.rows.map((row: any) => [row.id, row])
+    );
+
     const results: unknown[] = [];
     for (const line of input.items) {
       if (!suggestions.has(line.inventoryEntryId))
         throw new Error(
           "One or more selected inventory items are not part of this meal-day review",
         );
-      const before = (
-        await client.query(
-          `SELECT * FROM inventory_entries WHERE id=$1 AND household_id=$2 AND archived_at IS NULL FOR UPDATE`,
-          [line.inventoryEntryId, actor.householdId],
-        )
-      ).rows[0];
+      const before = beforeMap.get(line.inventoryEntryId);
       if (!before) throw new Error("One or more selected inventory items are no longer available");
       if (before.quantity == null)
         throw new Error(
