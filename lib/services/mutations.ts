@@ -353,18 +353,22 @@ async function archiveMealDayIfComplete(client: PoolClient, actor: Actor, mealDa
     [actor.householdId],
   );
   let deferredCount = 0;
-  for (const entry of active.rows.filter((row) => row.status === "deferred")) {
-    const sourceDate = dateOnly(entry.meal_date);
-    const archiveNote = `Deferred from archived meal plan (${sourceDate}).`;
-    const notes = [entry.notes, archiveNote].filter(Boolean).join("\n");
-    const created = await client.query(
-      `INSERT INTO unscheduled_items (
-        household_id,week_start,item_type,assigned_user_id,title,recipe_id,
-        planned_yield,status,notes,source_meal_plan_entry_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'planned',$8,$9)
-      ON CONFLICT (source_meal_plan_entry_id) DO NOTHING
-      RETURNING *`,
-      [
+  const deferredEntries = active.rows.filter((row) => row.status === "deferred");
+  if (deferredEntries.length > 0) {
+    const values: any[] = [];
+    const placeholders: string[] = [];
+    let paramIndex = 1;
+
+    for (const entry of deferredEntries) {
+      const sourceDate = dateOnly(entry.meal_date);
+      const archiveNote = `Deferred from archived meal plan (${sourceDate}).`;
+      const notes = [entry.notes, archiveNote].filter(Boolean).join("\n");
+
+      placeholders.push(
+        `($${paramIndex++},$${paramIndex++},$${paramIndex++},$${paramIndex++},$${paramIndex++},$${paramIndex++},$${paramIndex++},'planned',$${paramIndex++},$${paramIndex++})`,
+      );
+
+      values.push(
         actor.householdId,
         currentWeek.rows[0].week_start,
         entry.meal_type,
@@ -374,18 +378,29 @@ async function archiveMealDayIfComplete(client: PoolClient, actor: Actor, mealDa
         entry.planned_yield,
         notes,
         entry.id,
-      ],
+      );
+    }
+
+    const created = await client.query(
+      `INSERT INTO unscheduled_items (
+        household_id,week_start,item_type,assigned_user_id,title,recipe_id,
+        planned_yield,status,notes,source_meal_plan_entry_id
+      ) VALUES ${placeholders.join(",")}
+      ON CONFLICT (source_meal_plan_entry_id) DO NOTHING
+      RETURNING *`,
+      values,
     );
-    if (created.rows[0]) {
+
+    for (const row of created.rows) {
       deferredCount += 1;
       await audit(
         client,
         actor,
         "create",
         "unscheduled_item",
-        created.rows[0].id,
+        row.id,
         null,
-        created.rows[0],
+        row,
         "Returned a deferred meal from an archived day",
       );
     }
