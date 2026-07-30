@@ -1014,11 +1014,9 @@ export async function resolveMealInventoryReview(actor: Actor, id: string, input
     const itemIds = input.items.map((item: { inventoryEntryId: string }) => item.inventoryEntryId);
     const beforeRows = await client.query(
       `SELECT * FROM inventory_entries WHERE id=ANY($1::uuid[]) AND household_id=$2 AND archived_at IS NULL FOR UPDATE`,
-      [itemIds, actor.householdId]
+      [itemIds, actor.householdId],
     );
-    const beforeMap = new Map<string, any>(
-      beforeRows.rows.map((row: any) => [row.id, row])
-    );
+    const beforeMap = new Map<string, any>(beforeRows.rows.map((row: any) => [row.id, row]));
 
     const results: unknown[] = [];
     for (const line of input.items) {
