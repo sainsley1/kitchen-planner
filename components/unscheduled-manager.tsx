@@ -63,13 +63,15 @@ export function UnscheduledManager({
   }
 
   async function patch(id: string, body: unknown) {
+    setError("");
     const response = await fetch(`/api/v1/unscheduled/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!response.ok)
-      return window.alert((await response.json().catch(() => ({}))).error || "Update failed.");
+    if (!response.ok) {
+      return setError((await response.json().catch(() => ({}))).error || "Update failed.");
+    }
     router.refresh();
   }
 
