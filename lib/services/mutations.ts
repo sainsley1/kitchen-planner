@@ -839,13 +839,18 @@ export async function registerGroceryShop(
     let deferredCount = 0;
     const inventoryItems: unknown[] = [];
 
+    const shoppingItemIds = value.items.map((i) => i.shoppingItemId);
+    const shoppingItemsResult = await client.query(
+      `SELECT * FROM shopping_items WHERE id = ANY($1) AND household_id=$2 FOR UPDATE`,
+      [shoppingItemIds, actor.householdId]
+    );
+    const shoppingItemsMap = new Map(shoppingItemsResult.rows.map((r: any) => [r.id, r]));
+
     for (const line of value.items) {
-      const shopping = await getOwned(
-        client,
-        "shopping_items",
-        line.shoppingItemId,
-        actor.householdId,
-      );
+      const shopping = shoppingItemsMap.get(line.shoppingItemId);
+      if (!shopping) {
+        throw new Error("Record not found");
+      }
       if (shopping.status !== "purchased") {
         throw new Error(`${shopping.item} is no longer marked as purchased`);
       }
