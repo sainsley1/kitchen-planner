@@ -53,22 +53,54 @@ async function audit(
   reason?: string,
   source: "ui" | "system" = "ui",
 ) {
-  await client.query(
-    `
-    INSERT INTO audit_events (household_id, actor_user_id, source, action, entity_type, entity_id, reason, before_state, after_state)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb)
-  `,
-    [
+  await auditMany(
+    client,
+    actor,
+    action,
+    entityType,
+    [{ entityId, beforeState, afterState, reason }],
+    source,
+  );
+}
+
+async function auditMany(
+  client: PoolClient,
+  actor: Actor,
+  action: string,
+  entityType: string,
+  events: {
+    entityId: string | null;
+    beforeState: unknown;
+    afterState: unknown;
+    reason?: string;
+  }[],
+  source: "ui" | "system" = "ui",
+) {
+  if (events.length === 0) return;
+  const auditValues = [];
+  const auditPlaceholders = [];
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
+    const baseIndex = i * 9;
+    auditPlaceholders.push(
+      `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}::jsonb, $${baseIndex + 9}::jsonb)`,
+    );
+
+    auditValues.push(
       actor.householdId,
       actor.userId,
       source,
       action,
       entityType,
-      entityId,
-      reason ?? null,
-      JSON.stringify(beforeState ?? null),
-      JSON.stringify(afterState ?? null),
-    ],
+      event.entityId,
+      event.reason ?? null,
+      JSON.stringify(event.beforeState ?? null),
+      JSON.stringify(event.afterState ?? null),
+    );
+  }
+  await client.query(
+    `INSERT INTO audit_events (household_id, actor_user_id, source, action, entity_type, entity_id, reason, before_state, after_state) VALUES ${auditPlaceholders.join(", ")}`,
+    auditValues,
   );
 }
 
@@ -802,30 +834,51 @@ export async function bulkUpdateShoppingStatus(
   const value = shoppingBulkStatusInput.parse(input);
   const ids = [...new Set(value.ids)];
   return transaction(async (client) => {
-    const updated = [];
-    for (const id of ids) {
-      const before = await getOwned(client, "shopping_items", id, actor.householdId);
-      if (!["to_buy", "purchased"].includes(before.status))
-        throw new Error(`${before.item} is not available for this grocery trip`);
-      const result = await client.query(
-        "UPDATE shopping_items SET status=$3,updated_at=now() WHERE id=$1 AND household_id=$2 RETURNING *",
-        [id, actor.householdId, value.status],
-      );
-      await audit(
-        client,
-        actor,
-        "bulk_update",
-        "shopping_item",
-        id,
-        before,
-        result.rows[0],
+    if (ids.length === 0) return { count: 0, items: [] };
+
+    const readPlaceholders = ids.map((_, i) => `$${i + 2}`).join(", ");
+
+    const beforeResult = await client.query(
+      `SELECT * FROM shopping_items WHERE id IN (${readPlaceholders}) AND household_id=$1 FOR UPDATE`,
+      [actor.householdId, ...ids],
+    );
+
+    const beforeMap = new Map();
+    for (const row of beforeResult.rows) {
+      if (!["to_buy", "purchased"].includes(row.status)) {
+        throw new Error(`${row.item} is not available for this grocery trip`);
+      }
+      beforeMap.set(row.id, row);
+    }
+
+    if (beforeResult.rows.length !== ids.length) {
+      throw new Error("Record not found");
+    }
+
+    const updatePlaceholders = ids.map((_, i) => `$${i + 3}`).join(", ");
+    const updateResult = await client.query(
+      `UPDATE shopping_items SET status=$2, updated_at=now() WHERE id IN (${updatePlaceholders}) AND household_id=$1 RETURNING *`,
+      [actor.householdId, value.status, ...ids],
+    );
+
+    const auditEvents = updateResult.rows.map((row) => {
+      const before = beforeMap.get(row.id);
+      const reason =
         value.status === "purchased"
           ? "Selected for grocery registration"
-          : "Removed from grocery registration selection",
-      );
-      updated.push(result.rows[0]);
-    }
-    return { count: updated.length, items: updated };
+          : "Removed from grocery registration selection";
+
+      return {
+        entityId: row.id,
+        beforeState: before,
+        afterState: row,
+        reason,
+      };
+    });
+
+    await auditMany(client, actor, "bulk_update", "shopping_item", auditEvents);
+
+    return { count: updateResult.rows.length, items: updateResult.rows };
   });
 }
 
