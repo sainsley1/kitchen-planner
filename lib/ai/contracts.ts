@@ -865,3 +865,27 @@ export function validateGroceryRecommendation(
     );
   return { ...recommendation, suggestions, warnings: warnings.slice(0, 20) };
 }
+
+export const importReconciliationActionEnum = z.enum([
+  "import",
+  "use_existing",
+  "replace_existing",
+  "import_unscheduled",
+  "skip",
+]);
+
+export const importReconciliationRecommendationItemSchema = z.object({
+  rowId: z.string().min(1).max(100),
+  recommendedAction: importReconciliationActionEnum,
+  targetId: z.string().nullable(),
+  confidence: z.enum(["high", "medium", "low"]),
+  rationale: z.string().trim().max(1000),
+});
+
+export const importReconciliationGenerationSchema = z.object({
+  summary: z.string().trim().max(1000),
+  recommendations: z.array(importReconciliationRecommendationItemSchema).min(1).max(100),
+  warnings: z.array(z.string().max(500)).max(20),
+});
+
+export type ImportReconciliationGeneration = z.infer<typeof importReconciliationGenerationSchema>;
