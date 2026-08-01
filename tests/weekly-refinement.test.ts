@@ -168,6 +168,7 @@ async function database(payload: WeeklyPlan = plan()) {
     "0014_weekly_plan_archival",
     "0015_planning_opportunities_and_inventory_review",
     "0016_multibuy_flyer_price_integrity",
+    "0017_price_history_and_deal_scoring",
   ])
     await db.exec(await fs.readFile(`drizzle/${name}.sql`, "utf8"));
   const client = {

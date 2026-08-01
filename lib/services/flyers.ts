@@ -14,6 +14,11 @@ import {
   flyerSourceInputSchema,
   normalizeFlyerExtraction,
 } from "@/lib/ai/contracts";
+import {
+  calculateDealGrade,
+  getHistoricalAveragePrice,
+  normalizeUnitPrice,
+} from "@/lib/flyers/price-intelligence";
 import { runStructured, type AiUsage } from "@/lib/ai/provider";
 
 const FLYER_PROMPT = `Extract grocery sale items from the supplied flyer image, PDF, or exact public flyer URL. Return English item names while preserving meaningful brand and product names. Assign a practical grocery category. Copy sale prices, regular prices, explicitly advertised savings or discount percentages, units, package sizes, member restrictions, multi-buy quantities, limits, and validity evidence exactly when visible. For a multi-buy such as "2 for $6", set price to the total bundle price 6 and multiBuyQuantity to 2. When a regular comparison price is printed for that offer, regularPrice is the price for one item; for example, "2 for $6, regular $3.99 each" means price 6, multiBuyQuantity 2 and regularPrice 3.99. savingsAmount is also per item for a multi-buy; if the flyer prints only a total bundle saving, divide it by multiBuyQuantity and preserve the printed total plus that conversion in evidenceText. Use pricingUnit and evidenceText to preserve the visible price basis. Preserve an explicitly printed savings amount or discount even when a regular price is not shown; derive a missing savingsAmount or discountPercent only when both sale and regular prices are visibly supported on a comparable basis, and otherwise leave that derived value null. If a comparison price remains ambiguous, leave it null, describe the ambiguity in warnings and set confidence below 0.75. Always set prioritized false because only the household can prioritize a sale. Use confidence below 0.75 whenever text, dates, units, or conditions are unclear. Never infer an item, price, regular price, savings claim or condition not visible in the source. Every extracted sale remains proposed until a household member reviews it.`;
