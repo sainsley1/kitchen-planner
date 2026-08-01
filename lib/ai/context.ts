@@ -454,6 +454,10 @@ export type PlanningContext = {
     limitText: string | null;
     notes: string | null;
     prioritized: boolean;
+    dealGrade?: string | null;
+    normalizedUnitPrice?: string | null;
+    normalizedUnitMeasure?: string | null;
+    estimatedRegularPrice?: string | null;
     opportunityScore: number;
     opportunityReasons: string[];
   }>;
@@ -525,6 +529,24 @@ function rankSaleOpportunities(
         score += 100;
         reasons.push("household priority");
       }
+      if (sale.dealGrade === "A+") {
+        score += 40;
+        reasons.push("🔥 A+ all-time low steal");
+      } else if (sale.dealGrade === "A") {
+        score += 25;
+        reasons.push("A grade great deal");
+      } else if (sale.dealGrade === "B") {
+        score += 15;
+        reasons.push("B grade good value");
+      } else if (sale.dealGrade === "F") {
+        score -= 50;
+        reasons.push("⚠️ F grade artificially inflated baseline");
+      }
+      if (sale.normalizedUnitPrice && sale.normalizedUnitMeasure) {
+        reasons.push(
+          `$${Number(sale.normalizedUnitPrice).toFixed(2)} / ${sale.normalizedUnitMeasure}`,
+        );
+      }
       const discount = numeric(sale.discountPercent);
       if (discount != null && discount > 0) {
         score += Math.min(discount / 2, 25);
@@ -543,6 +565,13 @@ function rankSaleOpportunities(
       if (overlap(words, inventoryWords)) {
         score += 6;
         reasons.push("matches current inventory");
+      }
+      const flavorWords = normalizedWords(
+        context.flavorAssets.map((asset) => asset.ingredient).join(" "),
+      );
+      if (overlap(words, flavorWords)) {
+        score += 12;
+        reasons.push("pairs with pantry flavor assets");
       }
       const produce = /produce|vegetable|fruit|herb/i.test(`${sale.category ?? ""} ${sale.item}`);
       if (!overlap(words, recentWords)) {
@@ -648,7 +677,7 @@ export async function planningContext(
       [householdId],
     ),
     pool().query<SaleRow>(
-      `SELECT s.id,f.store_name AS "storeName",f.store_location AS "storeLocation",f.valid_from::text AS "validFrom",f.valid_until::text AS "validUntil",s.item,s.brand,s.category,s.package_size AS "packageSize",s.price::text,s.regular_price::text AS "regularPrice",s.savings_amount::text AS "savingsAmount",s.discount_percent::text AS "discountPercent",s.pricing_unit AS "pricingUnit",s.multi_buy_quantity AS "multiBuyQuantity",s.member_only AS "memberOnly",s.limit_text AS "limitText",substring(s.notes for 500) AS notes,s.prioritized FROM flyer_sale_items s JOIN flyer_sources f ON f.id=s.flyer_source_id WHERE s.household_id=$1 AND s.status='accepted' AND f.status='committed' AND f.archived_at IS NULL AND f.valid_until>=$2::date AND f.valid_from<=$3::date ORDER BY s.prioritized DESC,f.valid_until,lower(f.store_name),lower(s.item)`,
+      `SELECT s.id,f.store_name AS "storeName",f.store_location AS "storeLocation",f.valid_from::text AS "validFrom",f.valid_until::text AS "validUntil",s.item,s.brand,s.category,s.package_size AS "packageSize",s.price::text,s.regular_price::text AS "regularPrice",s.savings_amount::text AS "savingsAmount",s.discount_percent::text AS "discountPercent",s.pricing_unit AS "pricingUnit",s.multi_buy_quantity AS "multiBuyQuantity",s.member_only AS "memberOnly",s.limit_text AS "limitText",substring(s.notes for 500) AS notes,s.prioritized,s.deal_grade AS "dealGrade",s.normalized_unit_price::text AS "normalizedUnitPrice",s.normalized_unit_measure AS "normalizedUnitMeasure",s.estimated_regular_price::text AS "estimatedRegularPrice" FROM flyer_sale_items s JOIN flyer_sources f ON f.id=s.flyer_source_id WHERE s.household_id=$1 AND s.status='accepted' AND f.status='committed' AND f.archived_at IS NULL AND f.valid_until>=$2::date AND f.valid_from<=$3::date ORDER BY s.prioritized DESC,f.valid_until,lower(f.store_name),lower(s.item)`,
       [householdId, startDate, endDate],
     ),
   ]);
