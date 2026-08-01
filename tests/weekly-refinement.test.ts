@@ -998,4 +998,148 @@ describe("targeted weekly-plan refinement", () => {
     ]);
     await db.close();
   }, 40_000);
+
+  it("includes current dish and past suggestion titles in excludedDishes", async () => {
+    const { db, id } = await database();
+    const makeAltMeal = (dish: string, index: number) => ({
+      id: "dinner",
+      mealDate: "2026-07-18",
+      mealType: "dinner" as const,
+      assignedUserId: null,
+      dish,
+      cuisine: "Flexible",
+      preparationBasis: "guided_method" as const,
+      recipeId: null,
+      recipeTitle: dish,
+      recipeUrl: `https://example.com/recipe-test-${index}`,
+      servings: 2,
+      leftoverServings: 0,
+      leftoverFromMealId: null,
+      packedLunch: false,
+      workplaceMeal: false,
+      workplaceFriendly: true,
+      intensity: "moderate" as const,
+      prepMinutes: 30,
+      plannedYield: "2 servings",
+      rationale: "Fits the plan.",
+      notes: null,
+      unscheduledItemId: null,
+      technique: "stovetop",
+      primaryIngredients: ["tofu"],
+      discovery: false,
+      saleItemIds: [],
+      ingredientRequirements: [
+        { item: "Tofu", category: "Produce", quantity: 1, unit: "pack", optional: false },
+      ],
+      preparationMethod: "Stir-fry tofu with vegetables.",
+    });
+
+    const alts = [
+      {
+        id: "alt-1",
+        meal: makeAltMeal("Tofu Stir-fry", 1),
+        leftoverImpact: "None",
+        sourceEvidence: null,
+      },
+      {
+        id: "alt-2",
+        meal: makeAltMeal("Lentil Curry", 2),
+        leftoverImpact: "None",
+        sourceEvidence: null,
+      },
+      {
+        id: "alt-3",
+        meal: makeAltMeal("Vegetable Soup", 3),
+        leftoverImpact: "None",
+        sourceEvidence: null,
+      },
+    ];
+
+    state.responses.push({
+      value: {
+        summary: "Suggested alternatives",
+        alternatives: alts,
+        recipeLinks: [],
+        warnings: [],
+      },
+      usage: usage("gpt-5.4"),
+      sources: alts.map((a) => ({ url: a.meal.recipeUrl, title: a.meal.dish })),
+    });
+
+    await createWeeklyPlanSuggestion(actor, id, {
+      kind: "alternatives",
+      mealId: "dinner",
+      instruction: "",
+      advanced: false,
+    });
+
+    const callInput = JSON.parse(state.calls[state.calls.length - 1].input as string);
+    expect(callInput.excludedDishes).toContain("Prawn tacos");
+    await db.close();
+  });
+
+  it("passes exploreBroaderOptions when wildcard is requested", async () => {
+    const { db, id } = await database();
+    const makeAltMeal = (dish: string, index: number) => ({
+      id: "dinner",
+      mealDate: "2026-07-18",
+      mealType: "dinner" as const,
+      assignedUserId: null,
+      dish,
+      cuisine: "Flexible",
+      preparationBasis: "guided_method" as const,
+      recipeId: null,
+      recipeTitle: dish,
+      recipeUrl: `https://example.com/wildcard-test-${index}`,
+      servings: 2,
+      leftoverServings: 0,
+      leftoverFromMealId: null,
+      packedLunch: false,
+      workplaceMeal: false,
+      workplaceFriendly: true,
+      intensity: "moderate" as const,
+      prepMinutes: 30,
+      plannedYield: "2 servings",
+      rationale: "Fits the plan.",
+      notes: null,
+      unscheduledItemId: null,
+      technique: "stovetop",
+      primaryIngredients: ["tofu"],
+      discovery: false,
+      saleItemIds: [],
+      ingredientRequirements: [
+        { item: "Tofu", category: "Produce", quantity: 1, unit: "pack", optional: false },
+      ],
+      preparationMethod: "Stir-fry tofu with vegetables.",
+    });
+
+    const alts = [
+      { id: "alt-1", meal: makeAltMeal("Ramen", 1), leftoverImpact: "None", sourceEvidence: null },
+      { id: "alt-2", meal: makeAltMeal("Tajine", 2), leftoverImpact: "None", sourceEvidence: null },
+      { id: "alt-3", meal: makeAltMeal("Paella", 3), leftoverImpact: "None", sourceEvidence: null },
+    ];
+
+    state.responses.push({
+      value: {
+        summary: "Suggested wildcards",
+        alternatives: alts,
+        recipeLinks: [],
+        warnings: [],
+      },
+      usage: usage("gpt-5.4"),
+      sources: alts.map((a) => ({ url: a.meal.recipeUrl, title: a.meal.dish })),
+    });
+
+    await createWeeklyPlanSuggestion(actor, id, {
+      kind: "alternatives",
+      mealId: "dinner",
+      instruction: "",
+      advanced: false,
+      wildcard: true,
+    });
+
+    const callInput = JSON.parse(state.calls[state.calls.length - 1].input as string);
+    expect(callInput.exploreBroaderOptions).toBe(true);
+    await db.close();
+  });
 });

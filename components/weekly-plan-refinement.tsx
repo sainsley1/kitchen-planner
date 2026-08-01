@@ -53,6 +53,7 @@ export function WeeklyPlanRefinement({
   const [mealDate, setMealDate] = useState(dates[0] ?? plan.startDate);
   const [instruction, setInstruction] = useState("");
   const [advanced, setAdvanced] = useState(false);
+  const [wildcard, setWildcard] = useState(false);
   const [savedRecipeId, setSavedRecipeId] = useState(recipes[0]?.id ?? "");
   const [suggestion, setSuggestion] = useState<SuggestionResult | null>(null);
   const [check, setCheck] = useState<CheckResult | null>(null);
@@ -105,6 +106,7 @@ export function WeeklyPlanRefinement({
         mealId: selected.id,
         instruction,
         advanced,
+        wildcard,
       });
       setSuggestion(response.suggestion);
       setCheck(null);
@@ -202,6 +204,14 @@ export function WeeklyPlanRefinement({
             onChange={(event) => setAdvanced(event.target.checked)}
           />
           Use advanced Terra for this request
+        </label>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={wildcard}
+            onChange={(event) => setWildcard(event.target.checked)}
+          />
+          Wildcard / Explore broader options
         </label>
         <label className="span-two">
           What should change?
