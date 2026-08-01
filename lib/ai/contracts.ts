@@ -334,6 +334,7 @@ export const weeklyPlanSuggestionRequestSchema = z.object({
   mealId: z.string().min(1).max(100),
   instruction: z.string().trim().max(2000).default(""),
   advanced: z.boolean().default(false),
+  wildcard: z.boolean().default(false),
 });
 export const weeklyPlanAlternativeOptionSchema = z.object({
   id: z.string().min(1).max(100),
