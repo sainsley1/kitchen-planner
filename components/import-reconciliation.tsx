@@ -360,6 +360,24 @@ export function ImportReconciliation({
     setBulkBusy(false);
     router.refresh();
   }
+  async function aiReconcile() {
+    setBulkBusy(true);
+    setBulkError("");
+    try {
+      const response = await fetch(`/api/v1/import/batches/${batch.id}/ai-reconcile`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setBulkError(body.error || "AI reconciliation failed.");
+      }
+    } catch (problem) {
+      setBulkError(problem instanceof Error ? problem.message : "AI reconciliation failed.");
+    } finally {
+      setBulkBusy(false);
+      router.refresh();
+    }
+  }
   const ready = resolved >= batch.reconciliationRows && !batch.committedAt;
   return (
     <div className="page-stack">
@@ -399,10 +417,17 @@ export function ImportReconciliation({
             <small>resolved</small>
           </span>
         </div>
-        {unresolved.length > 1 && (
-          <button className="secondary-button" disabled={bulkBusy} onClick={acceptSuggestions}>
-            {bulkBusy ? "Saving suggestions…" : "Accept all suggested actions"}
-          </button>
+        {unresolved.length > 0 && (
+          <div className="refinement-actions" style={{ marginTop: "1rem" }}>
+            <button className="secondary-button" disabled={bulkBusy} onClick={aiReconcile}>
+              {bulkBusy ? "Running AI…" : "Auto-resolve with AI (gpt-5.4)"}
+            </button>
+            {unresolved.length > 1 && (
+              <button className="secondary-button" disabled={bulkBusy} onClick={acceptSuggestions}>
+                {bulkBusy ? "Saving suggestions…" : "Accept all suggested actions"}
+              </button>
+            )}
+          </div>
         )}
         {bulkError && <p className="form-error">{bulkError}</p>}
       </section>
