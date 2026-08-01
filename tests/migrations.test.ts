@@ -31,6 +31,10 @@ describe("append-only PostgreSQL migrations", () => {
       "drizzle/0016_multibuy_flyer_price_integrity.sql",
       "utf8",
     );
+    const priceHistory = await fs.readFile(
+      "drizzle/0017_price_history_and_deal_scoring.sql",
+      "utf8",
+    );
     await database.exec(initial);
     await database.exec(phase3);
     await database.exec(phase4);
@@ -48,6 +52,7 @@ describe("append-only PostgreSQL migrations", () => {
     await database.exec(weeklyPlanArchival);
     await database.exec(planningOpportunities);
     await database.exec(multibuyFlyerPrices);
+    await database.exec(priceHistory);
     const result = await database.query<{ table_name: string }>(
       "SELECT table_name FROM information_schema.tables WHERE table_schema='public'",
     );

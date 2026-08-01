@@ -160,9 +160,31 @@ export const flyerSaleItems = pgTable("flyer_sale_items", {
   sourceReference: text("source_reference"),
   status: text("status").notNull().default("proposed"),
   prioritized: boolean("prioritized").notNull().default(false),
+  normalizedUnitPrice: numeric("normalized_unit_price", { precision: 10, scale: 2 }),
+  normalizedUnitMeasure: text("normalized_unit_measure"),
+  estimatedRegularPrice: numeric("estimated_regular_price", { precision: 10, scale: 2 }),
+  dealGrade: text("deal_grade"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("flyer_sale_items_source_idx").on(table.flyerSourceId,table.status,table.item),index("flyer_sale_items_active_lookup_idx").on(table.householdId,table.status,table.item)]);
+
+export const flyerItemPriceHistory = pgTable("flyer_item_price_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+  flyerSourceId: uuid("flyer_source_id").notNull().references(() => flyerSources.id, { onDelete: "cascade" }),
+  flyerSaleItemId: uuid("flyer_sale_item_id").notNull().references(() => flyerSaleItems.id, { onDelete: "cascade" }),
+  item: text("item").notNull(),
+  normalizedIngredient: text("normalized_ingredient").notNull(),
+  storeName: text("store_name").notNull(),
+  storeLocation: text("store_location"),
+  salePrice: numeric("sale_price", { precision: 10, scale: 2 }).notNull(),
+  regularPrice: numeric("regular_price", { precision: 10, scale: 2 }),
+  unitPrice: numeric("unit_price", { precision: 10, scale: 2 }),
+  unitMeasure: text("unit_measure"),
+  validFrom: date("valid_from").notNull(),
+  validUntil: date("valid_until").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const foodPreferences = pgTable("food_preferences", {
   id: uuid("id").primaryKey().defaultRandom(),
