@@ -51,6 +51,16 @@ describe("Flyer price intelligence & deal scoring", () => {
         unitMeasure: "kg",
       });
 
+      expect(normalizeUnitPrice(4.99, "500 gm", "each", 1)).toEqual({
+        unitPrice: 9.98,
+        unitMeasure: "kg",
+      });
+
+      expect(normalizeUnitPrice(2.5, "250 gms", "each", 1)).toEqual({
+        unitPrice: 10.0,
+        unitMeasure: "kg",
+      });
+
       expect(normalizeUnitPrice(6.0, "6 count", "pack", 1)).toEqual({
         unitPrice: 1.0,
         unitMeasure: "each",

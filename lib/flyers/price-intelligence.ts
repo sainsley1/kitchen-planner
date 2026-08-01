@@ -40,8 +40,8 @@ export function normalizeUnitPrice(
       };
   }
 
-  // Ounces (oz)
-  const ozMatch = input.match(/(\d+(?:\.\d+)?)\s*(?:oz|ounce|ounces)\b/);
+  // Ounces (oz / ozs)
+  const ozMatch = input.match(/(\d+(?:\.\d+)?)\s*(?:oz|ozs|ounce|ounces)\b/);
   if (ozMatch) {
     const oz = parseFloat(ozMatch[1]);
     if (oz > 0) {
@@ -53,8 +53,8 @@ export function normalizeUnitPrice(
     }
   }
 
-  // Grams (g)
-  const gMatch = input.match(/(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b/);
+  // Grams (g / gm / gms)
+  const gMatch = input.match(/(\d+(?:\.\d+)?)\s*(?:g|gm|gms|gram|grams)\b/);
   if (gMatch && !/kg|kilogram/.test(input)) {
     const grams = parseFloat(gMatch[1]);
     if (grams > 0) {
@@ -66,8 +66,8 @@ export function normalizeUnitPrice(
     }
   }
 
-  // Kilograms (kg)
-  const kgMatch = input.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilogram|kilograms)\b/);
+  // Kilograms (kg / kgs)
+  const kgMatch = input.match(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilogram|kilograms)\b/);
   if (kgMatch) {
     const kg = parseFloat(kgMatch[1]);
     if (kg > 0)
