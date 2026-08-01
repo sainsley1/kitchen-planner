@@ -403,6 +403,29 @@ export function FlyerManager({
       setBusy(false);
     }
   }
+  async function rejectLow(flyer: FlyerRecord) {
+    const selected = flyer.sales.filter(
+      (sale) => sale.status === "proposed" && Number(sale.confidence ?? 1) < 0.6,
+    );
+    if (!selected.length) {
+      setMessage("No proposed items fall below the 0.60 confidence threshold.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      for (const sale of selected)
+        await jsonCall(`/api/v1/flyers/${flyer.id}/sales/${sale.id}`, "PATCH", {
+          status: "rejected",
+        });
+      setMessage(`Rejected ${selected.length} low-confidence sale items (<60%).`);
+      router.refresh();
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : "Sales could not be rejected");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function commit(flyer: FlyerRecord) {
     setBusy(true);
     setError("");
@@ -543,14 +566,72 @@ export function FlyerManager({
                 placeholder="https://…"
               />
             </label>
-            <label className="span-two">
-              Flyer image or PDF
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,application/pdf"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              />
-            </label>
+            <div className="span-two">
+              <label style={{ display: "block", marginBottom: "6px" }}>Flyer image or PDF</label>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                <label
+                  className="secondary-button"
+                  style={{
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  📷 Snap Circular Photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    style={{ display: "none" }}
+                    onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                <label
+                  className="secondary-button"
+                  style={{
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  📁 Choose File / PDF
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,application/pdf"
+                    style={{ display: "none" }}
+                    onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {file && (
+                  <span
+                    style={{
+                      fontSize: "13px",
+                      color: "var(--ink-soft)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    ✓ {file.name} ({(file.size / 1024).toFixed(0)} KB)
+                    <button
+                      type="button"
+                      style={{
+                        border: 0,
+                        background: "none",
+                        color: "var(--danger)",
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                      onClick={() => setFile(null)}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
+              </div>
+            </div>
             <label className="span-two checkbox-label">
               <input
                 type="checkbox"
@@ -643,6 +724,13 @@ export function FlyerManager({
                   <button
                     className="secondary-button"
                     disabled={busy}
+                    onClick={() => rejectLow(flyer)}
+                  >
+                    Reject &lt;60% confidence
+                  </button>
+                  <button
+                    className="secondary-button"
+                    disabled={busy}
                     onClick={() => {
                       setEditing({ flyerId: flyer.id, saleId: null });
                       setForm({ ...emptySale });
@@ -671,6 +759,15 @@ export function FlyerManager({
               <div className="flyer-sale-list">
                 {flyer.sales.map((sale) => {
                   const multiBuy = (sale.multiBuyQuantity ?? 1) > 1;
+                  const grade = sale.dealGrade;
+                  const gradeColor =
+                    grade === "A+" || grade === "A"
+                      ? { bg: "#e6f4ea", fg: "#137333", border: "#ceead6" }
+                      : grade === "B"
+                        ? { bg: "#e8f0fe", fg: "#1a73e8", border: "#d2e3fc" }
+                        : grade === "F"
+                          ? { bg: "#fce8e6", fg: "#c5221f", border: "#fad2cf" }
+                          : { bg: "#f1f3f4", fg: "#5f6368", border: "#dadce0" };
                   return (
                     <article className={`flyer-sale ${sale.status}`} key={sale.id}>
                       {editing?.saleId === sale.id ? (
@@ -684,10 +781,28 @@ export function FlyerManager({
                       ) : (
                         <>
                           <div>
-                            <strong>
-                              {sale.brand ? `${sale.brand} ` : ""}
-                              {sale.item}
-                            </strong>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <strong>
+                                {sale.brand ? `${sale.brand} ` : ""}
+                                {sale.item}
+                              </strong>
+                              {grade && (
+                                <span
+                                  style={{
+                                    fontSize: "11px",
+                                    fontWeight: 700,
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    background: gradeColor.bg,
+                                    color: gradeColor.fg,
+                                    border: `1px solid ${gradeColor.border}`,
+                                  }}
+                                  title={`Deal Grade: ${grade}`}
+                                >
+                                  {grade === "A+" ? "🔥 A+ Deal" : `Grade ${grade}`}
+                                </span>
+                              )}
+                            </div>
                             <span>
                               {[
                                 sale.category,
@@ -705,7 +820,11 @@ export function FlyerManager({
                                 ? `${sale.multiBuyQuantity} for $${Number(sale.price).toFixed(2)}`
                                 : `$${Number(sale.price).toFixed(2)}`}
                             </strong>
-                            <span>{sale.pricingUnit ?? ""}</span>
+                            <span>
+                              {sale.normalizedUnitPrice
+                                ? `$${Number(sale.normalizedUnitPrice).toFixed(2)} / ${sale.normalizedUnitMeasure}`
+                                : (sale.pricingUnit ?? "")}
+                            </span>
                             {sale.regularPrice && (
                               <small>
                                 Regular ${Number(sale.regularPrice).toFixed(2)}
