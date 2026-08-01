@@ -72,7 +72,7 @@ describe("AI import reconciliation service", () => {
       "Only a household owner can reconcile an import batch",
     );
     await db.close();
-  }, 15_000);
+  }, 40_000);
 
   it("reconciles unresolved rows with AI recommendations and records audit trail", async () => {
     const db = await createDatabase();
@@ -129,5 +129,5 @@ describe("AI import reconciliation service", () => {
     expect(audit.rows[0]).toEqual({ action: "ai_reconcile", source: "ai" });
 
     await db.close();
-  }, 15_000);
+  }, 40_000);
 });

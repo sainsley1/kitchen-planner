@@ -274,14 +274,74 @@ export function RecipeManager({
                   placeholder="https://…"
                 />
               </label>
-              <label className="span-two">
-                Recipe image or PDF
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,application/pdf"
-                  onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
-                />
-              </label>
+              <div className="span-two">
+                <label style={{ display: "block", marginBottom: "6px" }}>Recipe image or PDF</label>
+                <div
+                  style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}
+                >
+                  <label
+                    className="secondary-button"
+                    style={{
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    📷 Take Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      style={{ display: "none" }}
+                      onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                  <label
+                    className="secondary-button"
+                    style={{
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    📁 Choose Photo / PDF
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,application/pdf"
+                      style={{ display: "none" }}
+                      onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                  {importFile && (
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        color: "var(--ink-soft)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      ✓ {importFile.name} ({(importFile.size / 1024).toFixed(0)} KB)
+                      <button
+                        type="button"
+                        style={{
+                          border: 0,
+                          background: "none",
+                          color: "var(--danger)",
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                        onClick={() => setImportFile(null)}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="form-actions">
               <button
