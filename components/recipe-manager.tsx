@@ -280,7 +280,9 @@ export function RecipeManager({
                 />
               </label>
               <div className="span-two">
-                <label style={{ display: "block", marginBottom: "6px" }}>Recipe image or PDF</label>
+                <label style={{ display: "block", marginBottom: "6px" }}>
+                  Recipe image, PDF, Video, or Audio
+                </label>
                 <div
                   style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}
                 >
@@ -293,10 +295,10 @@ export function RecipeManager({
                       gap: "6px",
                     }}
                   >
-                    📷 Take Photo
+                    📷 Take Photo / Record Video
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,video/*"
                       capture="environment"
                       style={{ display: "none" }}
                       onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
@@ -311,10 +313,10 @@ export function RecipeManager({
                       gap: "6px",
                     }}
                   >
-                    📁 Choose Photo / PDF
+                    📁 Choose File (Photo / PDF / Video / Audio)
                     <input
                       type="file"
-                      accept="image/png,image/jpeg,image/webp,application/pdf"
+                      accept="image/png,image/jpeg,image/webp,application/pdf,video/mp4,video/quicktime,video/webm,audio/mpeg,audio/mp4,audio/wav,audio/x-m4a,audio/m4a"
                       style={{ display: "none" }}
                       onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
                     />
@@ -329,7 +331,11 @@ export function RecipeManager({
                         gap: "6px",
                       }}
                     >
-                      ✓ {importFile.name} ({(importFile.size / 1024).toFixed(0)} KB)
+                      ✓ {importFile.name} (
+                      {importFile.size >= 1024 * 1024
+                        ? `${(importFile.size / (1024 * 1024)).toFixed(1)} MB`
+                        : `${(importFile.size / 1024).toFixed(0)} KB`}
+                      )
                       <button
                         type="button"
                         style={{

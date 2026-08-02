@@ -9,3 +9,10 @@ export const MAX_FLYER_UPLOAD_LABEL = "49 MB";
 export function flyerExceedsUploadLimit(size: number) {
   return size > MAX_FLYER_UPLOAD_BYTES;
 }
+
+export const MAX_RECIPE_UPLOAD_BYTES = 49_000_000;
+export const MAX_RECIPE_UPLOAD_LABEL = "49 MB";
+
+export function recipeExceedsUploadLimit(size: number) {
+  return size > MAX_RECIPE_UPLOAD_BYTES;
+}

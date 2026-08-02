@@ -233,4 +233,72 @@ describe("AI recipe ingestion service", () => {
 
     await db.close();
   }, 40_000);
+
+  it("extracts recipe draft from video attachment", async () => {
+    const db = await createDatabase();
+
+    state.responses.push({
+      value: {
+        title: "Instagram Reel Sopes",
+        sourceType: "imported_file",
+        sourceUrl: null,
+        description: "Sopes extracted from video reel.",
+        cuisine: "Mexican",
+        mealTypes: ["dinner"],
+        plannedYield: "4 servings",
+        servings: 4,
+        prepMinutes: 20,
+        cookMinutes: 15,
+        ingredients: [
+          {
+            item: "Masa harina",
+            category: "Baking & Cooking",
+            quantity: 2,
+            unit: "cups",
+            preparation: null,
+            optional: false,
+            notes: null,
+          },
+        ],
+        instructions: ["Mix dough.", "Pinch edges.", "Fry and serve."],
+        tags: ["mexican", "sopes"],
+        notes: null,
+        favorite: false,
+        recipeStatus: "proven",
+        freezerFriendly: false,
+        leftoverFriendly: true,
+        packedLunchFriendly: false,
+        extractionWarnings: [],
+      },
+      usage: {
+        responseId: "res-3",
+        model: "gpt-5.4",
+        reasoningEffort: "medium",
+        inputTokens: 1200,
+        cachedInputTokens: 0,
+        outputTokens: 300,
+        totalTokens: 1500,
+        estimatedCostUsd: 0.005,
+        latencyMs: 80,
+        webSearchCalls: 0,
+        webSourceCount: 0,
+      },
+    });
+
+    const videoAttachment = {
+      filename: "instagram_reel_sopes.mp4",
+      mimeType: "video/mp4",
+      bytes: Buffer.from("fake-mp4-bytes"),
+    };
+
+    const result = await importRecipeDraft(
+      ownerActor,
+      { text: null, sourceUrl: null },
+      videoAttachment,
+    );
+    expect(result.draft.title).toBe("Instagram Reel Sopes");
+    expect(result.draft.sourceType).toBe("imported_file");
+
+    await db.close();
+  }, 40_000);
 });
