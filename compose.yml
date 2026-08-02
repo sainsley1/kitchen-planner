@@ -40,7 +40,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      APP_VERSION: ${APP_VERSION:-0.6.5.3}
+      APP_VERSION: ${APP_VERSION:-0.7.0}
       APP_TIME_ZONE: ${APP_TIME_ZONE:-America/Vancouver}
       TZ: ${APP_TIME_ZONE:-America/Vancouver}
       PGTZ: ${APP_TIME_ZONE:-America/Vancouver}

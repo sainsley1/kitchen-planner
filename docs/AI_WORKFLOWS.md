@@ -1,4 +1,4 @@
-# AI workflows in 0.6.5.2
+# AI workflows in 0.7.0
 
 ## Routing
 
