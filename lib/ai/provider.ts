@@ -1,9 +1,10 @@
 import "server-only";
 import { createHmac } from "node:crypto";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { ResponseInput } from "openai/resources/responses/responses";
 import type { ZodType } from "zod";
+import type { AiAttachment } from "@/lib/ai/attachments";
 import { appConfig } from "@/lib/config";
 
 export type AiUsage = {
@@ -276,4 +277,13 @@ export async function runStructured<T>({
       response.status === "incomplete" ? (response.incomplete_details?.reason ?? "unknown") : null,
     );
   return { value: response.output_parsed, sources: evidence.sources, usage };
+}
+
+export async function transcribeMedia(attachment: AiAttachment): Promise<string> {
+  const file = await toFile(attachment.bytes, attachment.filename, { type: attachment.mimeType });
+  const transcription = await openai().audio.transcriptions.create({
+    file,
+    model: "whisper-1",
+  });
+  return transcription.text || "";
 }

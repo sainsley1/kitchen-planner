@@ -9,10 +9,10 @@ import {
   recipeImportRequestSchema,
   recipeInputSchema,
 } from "@/lib/ai/contracts";
-import { runStructured, type AiModelTier, type AiUsage } from "@/lib/ai/provider";
+import { runStructured, transcribeMedia, type AiModelTier, type AiUsage } from "@/lib/ai/provider";
 import { attachmentInput, type AiAttachment } from "@/lib/ai/attachments";
 
-const RECIPE_IMPORT_PROMPT = `Extract one recipe faithfully from the supplied household text, public source URL, image or PDF. Return all user-facing text in English while preserving proper dish and ingredient names. Do not invent missing quantities, cooking times, yields, ratings or instructions. Use null or an extraction warning when the source does not establish a value. Ingredient preparation belongs in preparation, not the ingredient name. Instructions must remain in source order. A public URL must be the exact supplied recipe URL, never a guessed alternate URL. Classify practical freezer, leftover and packed-lunch suitability conservatively. Identify key flavor assets (sauces, marinades, spices, aromatics, herbs, or pastes) and include them in tags with a "flavor_asset:" prefix (e.g. "flavor_asset:garlic", "flavor_asset:ginger", "flavor_asset:chili").`;
+const RECIPE_IMPORT_PROMPT = `Extract one recipe faithfully from the supplied household text, public source URL, image, PDF, video or audio transcript. Return all user-facing text in English while preserving proper dish and ingredient names. Do not invent missing quantities, cooking times, yields, ratings or instructions. Use null or an extraction warning when the source does not establish a value. Ingredient preparation belongs in preparation, not the ingredient name. Instructions must remain in source order. A public URL must be the exact supplied recipe URL, never a guessed alternate URL. Classify practical freezer, leftover and packed-lunch suitability conservatively. Identify key flavor assets (sauces, marinades, spices, aromatics, herbs, or pastes) and include them in tags with a "flavor_asset:" prefix (e.g. "flavor_asset:garlic", "flavor_asset:ginger", "flavor_asset:chili").`;
 const scheduleSchema = z.object({
   weekStart: z.string().date(),
   itemType: z.enum(["breakfast", "lunch", "dinner", "snack", "dessert", "prep"]),
@@ -235,6 +235,7 @@ async function finishImport(
     ]);
   });
 }
+
 export async function importRecipeDraft(
   actor: HouseholdSession,
   inputValue: unknown,
@@ -243,25 +244,39 @@ export async function importRecipeDraft(
   if (!appConfig.aiConfigured) throw new Error("OpenAI is not configured");
   const supplied = inputValue && typeof inputValue === "object" ? inputValue : {};
   const input = recipeImportRequestSchema.parse({ ...supplied, fileProvided: Boolean(attachment) });
+  const isMedia = Boolean(
+    attachment &&
+    (attachment.mimeType.startsWith("video/") || attachment.mimeType.startsWith("audio/")),
+  );
+  let mediaTranscript: string | null = null;
+  if (isMedia && attachment) {
+    mediaTranscript = await transcribeMedia(attachment);
+  }
   const tier: AiModelTier =
     attachment || input.sourceUrl || Number(input.text?.length) > 6000 ? "primary" : "economy";
   const ids = await beginImport(actor, tier, {
     sourceUrl: input.sourceUrl,
-    hasText: Boolean(input.text),
+    hasText: Boolean(input.text || mediaTranscript),
     filename: attachment?.filename ?? null,
   });
+  const recipeText = isMedia
+    ? [input.text, `[Audio/Video Transcript from ${attachment!.filename}]:\n${mediaTranscript}`]
+        .filter(Boolean)
+        .join("\n\n")
+    : input.text;
   const requestText = JSON.stringify({
     sourceUrl: input.sourceUrl,
-    recipeText: input.text,
+    recipeText,
     sourceType: attachment ? "imported_file" : input.sourceUrl ? "external_link" : "imported_text",
   });
+  const visualAttachment = attachment && !isMedia ? attachment : undefined;
   try {
     const result = await runStructured({
       householdId: actor.householdId,
       schema: recipeImportDraftSchema,
       schemaName: "kitchen_recipe_import",
       instructions: RECIPE_IMPORT_PROMPT,
-      input: attachment ? attachmentInput(requestText, attachment) : requestText,
+      input: visualAttachment ? attachmentInput(requestText, visualAttachment) : requestText,
       modelTier: tier,
       maxOutputTokens: 12_000,
       webSearch: Boolean(input.sourceUrl),
