@@ -1,6 +1,6 @@
 # Kitchen Planner Maintainer Guide
 
-Version covered: 0.6.5.3
+Version covered: 0.7.0
 Audience: maintainers, future contributors, and coding agents
 
 ## 1. Purpose of this guide

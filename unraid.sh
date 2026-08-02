@@ -8,7 +8,7 @@ APP_IMAGE="kitchen-planner:local"
 APP_CONTAINER="kitchen-planner-app"
 DB_CONTAINER="kitchen-planner-db"
 NETWORK="kitchen-planner-internal"
-APP_RELEASE_VERSION="0.6.5.3"
+APP_RELEASE_VERSION="0.7.0"
 
 die() {
   echo "ERROR: $*" >&2

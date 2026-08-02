@@ -1,6 +1,6 @@
 {
   "name": "kitchen-planner",
-  "version": "0.6.5.3",
+  "version": "0.7.0",
   "private": true,
   "engines": {
     "node": ">=22"
