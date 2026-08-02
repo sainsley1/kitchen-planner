@@ -26,6 +26,8 @@ vi.mock("@/lib/ai/provider", () => ({
     if (!next) throw new Error("No mock response queued");
     return { value: next.value, usage: next.usage, sources: [] };
   },
+  transcribeMedia: async (attachment: { filename: string }) =>
+    `Mocked audio transcript for ${attachment.filename}`,
 }));
 
 import { importRecipeDraft } from "../lib/services/recipes";
