@@ -127,6 +127,9 @@ export function RecipeManager({
     setForm(emptyRecipe());
     setWarnings([]);
     setShowEditor(false);
+    setImportText("");
+    setImportUrl("");
+    setImportFile(null);
   }
   function edit(item: RecipeRecord) {
     setEditingId(item.id);
@@ -157,6 +160,7 @@ export function RecipeManager({
       setMessage(editingId ? "Recipe updated." : "Recipe added to the household cookbook.");
       reset();
       router.refresh();
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : "Recipe could not be saved");
     } finally {
@@ -183,6 +187,7 @@ export function RecipeManager({
       setShowEditor(true);
       setShowImport(false);
       setMessage(`Recipe organized with ${body.modelTier}. Review it before saving.`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : "Recipe import failed");
     } finally {
