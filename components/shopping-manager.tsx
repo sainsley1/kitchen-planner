@@ -36,7 +36,7 @@ type RegistrationDraft = {
   notes: string;
 };
 
-const quantityPattern = "(?:[0-9]+(?:\\.[0-9]{0,3})?|\\.[0-9]{1,3})";
+const quantityPattern = "(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)";
 
 export function ShoppingManager({
   initialItems,

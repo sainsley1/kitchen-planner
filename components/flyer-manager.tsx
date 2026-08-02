@@ -225,7 +225,7 @@ function SaleEditor({
             type="number"
             min="0"
             max="1"
-            step="0.001"
+            step="any"
             value={form.confidence}
             onChange={(event) => setForm({ ...form, confidence: event.target.value })}
           />

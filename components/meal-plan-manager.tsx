@@ -202,9 +202,9 @@ export function MealPlanManager({
                       Subtract
                       <input
                         type="number"
-                        min="0.001"
+                        min="0"
                         max={suggestion.availableQuantity}
-                        step="0.001"
+                        step="any"
                         disabled={!state.selected}
                         value={state.amount}
                         onChange={(event) =>

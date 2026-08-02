@@ -1304,8 +1304,8 @@ export function WeeklyPlanner({
                             <input
                               aria-label="Ingredient quantity"
                               type="number"
-                              min="0.001"
-                              step="0.001"
+                              min="0"
+                              step="any"
                               value={requirement.quantity ?? ""}
                               onChange={(event) =>
                                 updateRequirement(index, requirementIndex, {
@@ -1512,7 +1512,7 @@ export function WeeklyPlanner({
                           aria-label="Quantity"
                           type="number"
                           min="0"
-                          step="0.001"
+                          step="any"
                           value={item.quantity ?? ""}
                           onChange={(event) =>
                             updateShopping(index, {

@@ -266,7 +266,17 @@ export async function importRecipeDraft(
       maxOutputTokens: 12_000,
       webSearch: Boolean(input.sourceUrl),
     });
-    const draft = recipeImportDraftSchema.parse(result.value);
+    const parsedDraft = recipeImportDraftSchema.parse(result.value);
+    const draft = {
+      ...parsedDraft,
+      ingredients: parsedDraft.ingredients.map((ing) => ({
+        ...ing,
+        quantity:
+          ing.quantity != null
+            ? Math.round((ing.quantity + Number.EPSILON) * 1000) / 1000
+            : null,
+      })),
+    };
     await finishImport(ids, result.usage);
     return {
       draft,
