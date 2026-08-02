@@ -272,9 +272,7 @@ export async function importRecipeDraft(
       ingredients: parsedDraft.ingredients.map((ing) => ({
         ...ing,
         quantity:
-          ing.quantity != null
-            ? Math.round((ing.quantity + Number.EPSILON) * 1000) / 1000
-            : null,
+          ing.quantity != null ? Math.round((ing.quantity + Number.EPSILON) * 1000) / 1000 : null,
       })),
     };
     await finishImport(ids, result.usage);
