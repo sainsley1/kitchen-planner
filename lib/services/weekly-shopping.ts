@@ -279,14 +279,25 @@ function preferredInventory(
   context: PlanningContext,
 ) {
   const candidates = matchingInventory(item, inventoryEntryId, context);
-  if (!unit) return candidates[0];
+  if (!candidates.length) return null;
+  const availableCandidates = candidates.filter((entry) => {
+    const qty = finiteQuantity(entry.quantity);
+    return qty == null || qty > 0;
+  });
+  const pool = availableCandidates.length ? availableCandidates : candidates;
+  if (!unit) return pool[0];
   return (
-    candidates.find((entry) => ingredientUnitsComparable(entry.unit, unit)) ??
-    candidates.find((entry) => recordedAmount(entry) != null) ??
-    candidates[0]
+    pool.find((entry) => ingredientUnitsComparable(entry.unit, unit)) ??
+    pool.find((entry) => recordedAmount(entry) != null) ??
+    pool[0]
   );
 }
 function enrichMealRequirements(plan: WeeklyPlan, context: PlanningContext): WeeklyPlan {
+  const activeInventory = new Map(context.inventory.map((item) => [item.id, item]));
+  const decisionMap = new Map(
+    plan.shoppingDecisions.map((decision) => [decision.requirementKey, decision]),
+  );
+
   return {
     ...plan,
     meals: plan.meals.map((meal) => {
@@ -321,16 +332,36 @@ function enrichMealRequirements(plan: WeeklyPlan, context: PlanningContext): Wee
             .map((entry) => entry.item);
       }
       ingredientRequirements = ingredientRequirements.map((requirement) => {
+        const unitKey = normalizedShoppingUnit(requirement.unit);
+        const reqKey = shoppingRequirementKey(requirement.item, unitKey);
+        const decision = decisionMap.get(reqKey);
+
+        if (decision) {
+          if (decision.action === "exclude") {
+            return { ...requirement, inventoryEntryId: null };
+          }
+          if (decision.action === "inventory" && decision.inventoryEntryId) {
+            const exact = activeInventory.get(decision.inventoryEntryId);
+            return {
+              ...requirement,
+              inventoryEntryId:
+                exact && namesMatch(exact.ingredient, requirement.item)
+                  ? decision.inventoryEntryId
+                  : null,
+            };
+          }
+        }
+
         if (requirement.inventoryEntryId) {
-          const exact = context.inventory.find(
-            (entry) => entry.id === requirement.inventoryEntryId,
-          );
+          const exact = activeInventory.get(requirement.inventoryEntryId);
           if (exact && namesMatch(exact.ingredient, requirement.item)) return requirement;
         }
         const compatible = preferredInventory(requirement.item, requirement.unit, null, context);
         return { ...requirement, inventoryEntryId: compatible?.id ?? null };
       });
-      const inventoryUses = meal.inventoryUses.map((entry) => ({ ...entry }));
+      const inventoryUses = meal.inventoryUses
+        .filter((entry) => activeInventory.has(entry.inventoryEntryId))
+        .map((entry) => ({ ...entry }));
       for (const requirement of ingredientRequirements) {
         if (requirement.optional) continue;
         const candidates = matchingInventory(
