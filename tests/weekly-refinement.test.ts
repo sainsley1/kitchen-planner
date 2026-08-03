@@ -500,6 +500,41 @@ describe("targeted weekly-plan refinement", () => {
     ).toBe(true);
     await db.close();
   }, 40_000);
+
+  it("accepts guided method alternatives with null recipeUrl", async () => {
+    const { db, id } = await database();
+    const alternatives = [
+      "Quick Lemon Shrimp Stir-Fry",
+      "Shrimp & Avocados Bowl",
+      "Grilled Shrimp Skewers",
+    ].map((dish, index) => ({
+      id: `option-${index + 1}`,
+      meal: {
+        ...meal("dinner", "dinner", dish),
+        preparationBasis: "guided_method" as const,
+        recipeTitle: null,
+        recipeUrl: null,
+      },
+      shopping: [],
+      shoppingImpact: "No extra shopping.",
+      leftoverImpact: "No downstream leftovers.",
+      sourceEvidence: "Guided cooking method.",
+    }));
+    state.responses.push({
+      value: { summary: "Three guided alternatives", alternatives, recipeLinks: [], warnings: [] },
+      usage: usage("gpt-5.4"),
+      sources: [],
+    });
+    const suggestion = await createWeeklyPlanSuggestion(actor, id, {
+      kind: "alternatives",
+      mealId: "dinner",
+      instruction: "",
+      advanced: false,
+    });
+    expect(suggestion.payload.alternatives).toHaveLength(3);
+    expect(suggestion.payload.alternatives[0].meal.recipeUrl).toBeNull();
+    await db.close();
+  }, 40_000);
   it("shows verified recipe ingredients and adds a previously omitted ingredient when the link is attached", async () => {
     const spanakopitaPlan = plan();
     spanakopitaPlan.meals[1].dish = "Spanakopita";
