@@ -792,8 +792,9 @@ function filteredSuggestion(
     ...value,
     alternatives: value.alternatives.filter(
       (option) =>
-        Boolean(option.meal.recipeUrl && evidenceFor(evidence, option.meal.recipeUrl)) &&
-        !blocked(domainOf(option.meal.recipeUrl!), blockedDomains),
+        !option.meal.recipeUrl ||
+        (Boolean(evidenceFor(evidence, option.meal.recipeUrl)) &&
+          !blocked(domainOf(option.meal.recipeUrl), blockedDomains)),
     ),
     recipeLinks: value.recipeLinks
       .filter(
