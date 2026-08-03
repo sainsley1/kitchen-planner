@@ -1091,6 +1091,42 @@ describe("premium weekly planning", () => {
     );
   });
 
+  it("prunes stale inventoryUses referencing unavailable inventory and routes missing requirements to shopping", () => {
+    const plan = validPlan();
+    const household = context();
+    const missingInventoryId = "99999999-9999-4999-8999-999999999999";
+    plan.meals[0].inventoryUses = [
+      {
+        inventoryEntryId: missingInventoryId,
+        ingredient: "Red onion",
+        quantity: 1,
+        unit: "each",
+      },
+    ];
+    plan.meals[0].ingredientRequirements = [
+      {
+        item: "Red onion",
+        category: "Produce",
+        quantity: 1,
+        unit: "each",
+        optional: false,
+        inventoryEntryId: missingInventoryId,
+      },
+    ];
+
+    const reconciled = reconcileWeeklyPlanShopping(plan, household);
+    expect(reconciled.plan.meals[0].inventoryUses).toEqual([]);
+    expect(reconciled.plan.meals[0].ingredientRequirements[0].inventoryEntryId).toBeNull();
+    expect(reconciled.plan.shopping).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ item: "Red onion", quantity: 1, unit: "each" }),
+      ]),
+    );
+
+    const issues = validateWeeklyPlan(reconciled.plan, request(), household);
+    expect(issues.filter((issue) => issue.code === "unknown_inventory")).toEqual([]);
+  });
+
   it("accepts an excessive model warning list and bounds it before persistence", () => {
     const modelPlan = validPlan();
     modelPlan.warnings = Array.from({ length: 35 }, (_, index) => `Model warning ${index + 1}.`);
