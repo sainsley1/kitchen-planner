@@ -1127,6 +1127,49 @@ describe("premium weekly planning", () => {
     expect(issues.filter((issue) => issue.code === "unknown_inventory")).toEqual([]);
   });
 
+  it("does not falsely auto-match composite fruit mixes to simple single ingredient requirements", () => {
+    const plan = validPlan();
+    const household = context();
+    const mixInventoryId = "88888888-8888-4888-8888-888888888888";
+    household.inventory.push({
+      id: mixInventoryId,
+      ingredient: "Guava, mango & banana fruit mix",
+      brandVariety: null,
+      category: "Frozen",
+      quantity: "1.000",
+      unit: "bag",
+      packageState: "opened",
+      priority: "normal",
+      locationName: "Freezer",
+      storageDetail: null,
+      bestBefore: null,
+      notes: null,
+      directMealUse: null,
+    });
+    plan.meals[0].ingredientRequirements = [
+      {
+        item: "Bananas",
+        category: "Produce",
+        quantity: 2,
+        unit: "each",
+        optional: false,
+        inventoryEntryId: null,
+      },
+    ];
+
+    const reconciled = reconcileWeeklyPlanShopping(plan, household);
+    expect(reconciled.plan.meals[0].ingredientRequirements[0].inventoryEntryId).toBeNull();
+    expect(reconciled.plan.meals[0].inventoryUses).toEqual([]);
+    expect(reconciled.plan.shopping).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ item: "Bananas", quantity: 2, unit: "each" }),
+      ]),
+    );
+
+    const issues = validateWeeklyPlan(reconciled.plan, request(), household);
+    expect(issues.filter((issue) => issue.code === "inventory_item_mismatch")).toEqual([]);
+  });
+
   it("accepts an excessive model warning list and bounds it before persistence", () => {
     const modelPlan = validPlan();
     modelPlan.warnings = Array.from({ length: 35 }, (_, index) => `Model warning ${index + 1}.`);

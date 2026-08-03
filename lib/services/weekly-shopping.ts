@@ -156,7 +156,18 @@ export function shoppingRequirementKey(item: string, unit: string | null | undef
 export function ingredientNamesMatch(left: string, right: string) {
   const a = normalizedName(left);
   const b = normalizedName(right);
-  return Boolean(a && b && (a === b || ` ${a} `.includes(` ${b} `) || ` ${b} `.includes(` ${a} `)));
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  const isComposite = (raw: string) =>
+    /[,&]|\b(mix|blend|medley|variety|trail mix|fruit mix|seasoning|dressing)\b/i.test(raw) ||
+    /\b(and|&)\b/i.test(raw);
+
+  const leftComposite = isComposite(left);
+  const rightComposite = isComposite(right);
+  if (leftComposite !== rightComposite) return false;
+
+  return ` ${a} `.includes(` ${b} `) || ` ${b} `.includes(` ${a} `);
 }
 export function convertIngredientQuantity(
   quantity: number,
