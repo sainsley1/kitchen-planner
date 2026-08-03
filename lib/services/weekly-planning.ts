@@ -32,6 +32,7 @@ import {
   AUTO_SHORTFALL_PREFIX,
   convertIngredientQuantity,
   hasSameUnitShoppingCoverage,
+  ingredientNamesMatch,
   normalizedShoppingUnit,
   reconcileWeeklyPlanShopping,
   shoppingRequirementKey,
@@ -446,9 +447,7 @@ function normalizedName(value: string) {
     .trim();
 }
 function relatedName(left: string, right: string) {
-  const a = normalizedName(left);
-  const b = normalizedName(right);
-  return Boolean(a && b && (a.includes(b) || b.includes(a)));
+  return ingredientNamesMatch(left, right);
 }
 function persistedMealInventoryUses(meal: WeeklyPlan["meals"][number]) {
   const uses: Array<{
