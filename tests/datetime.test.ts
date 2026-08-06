@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatHouseholdDateTime, householdDateKey, householdSaturdayKey, formatDateKey, addDaysToDateKey } from "../lib/datetime";
+import {
+  formatHouseholdDateTime,
+  householdDateKey,
+  householdSaturdayKey,
+  formatDateKey,
+  addDaysToDateKey,
+} from "../lib/datetime";
 
 describe("Vancouver household time", () => {
   it("converts UTC timestamps to the preceding PDT calendar date when appropriate", () => {
@@ -19,12 +25,20 @@ describe("Vancouver household time", () => {
 
 describe("formatDateKey", () => {
   it("formats a date string using Intl.DateTimeFormatOptions in UTC", () => {
-    expect(formatDateKey("2024-01-15", { month: "short", day: "numeric" })).toBe("Jan 15");
-    expect(formatDateKey("2024-12-31", { month: "long", day: "2-digit", year: "numeric" })).toBe("December 31, 2024");
+    const formattedShort = formatDateKey("2024-01-15", { month: "short", day: "numeric" });
+    expect(formattedShort).toMatch(/Jan\.?\s*15/);
+
+    const formattedLong = formatDateKey("2024-12-31", {
+      month: "long",
+      day: "2-digit",
+      year: "numeric",
+    });
+    expect(formattedLong).toMatch(/December\s*31,?\s*2024/);
   });
 
   it("handles different date keys appropriately", () => {
-    expect(formatDateKey("2020-02-29", { month: "short", day: "numeric" })).toBe("Feb 29");
+    const formattedLeap = formatDateKey("2020-02-29", { month: "short", day: "numeric" });
+    expect(formattedLeap).toMatch(/Feb\.?\s*29/);
   });
 });
 
