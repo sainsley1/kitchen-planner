@@ -1,3 +1,8 @@
+export function parseNumericQuantity(value: number | string | null | undefined): number | null {
+  const parsed = value == null ? NaN : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function formatQuantity(value: string | number | null | undefined): string {
   if (value == null) return "";
 
