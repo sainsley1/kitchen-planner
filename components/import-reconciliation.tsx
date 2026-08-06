@@ -332,26 +332,37 @@ export function ImportReconciliation({
       return;
     setBulkBusy(true);
     setBulkError("");
-    for (const row of unresolved) {
-      const candidates = row.duplicateCandidates.filter(
-        (candidate) => candidate.id && !candidate.synthetic,
-      );
-      const targetId = candidates[0]?.id ?? null;
-      const action = row.suggestedAction ?? "skip";
-      const response = await fetch(`/api/v1/import/rows/${row.id}/resolution`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action,
-          payload: row.normalizedPayload,
-          targetId: action === "use_existing" || action === "replace_existing" ? targetId : null,
-        }),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        setBulkError(
-          `${row.sourceSheet} row ${row.sourceRow}: ${body.error || "resolution failed"}`,
+    const concurrency = 10;
+    for (let i = 0; i < unresolved.length; i += concurrency) {
+      const chunk = unresolved.slice(i, i + concurrency);
+      try {
+        await Promise.all(
+          chunk.map(async (row) => {
+            const candidates = row.duplicateCandidates.filter(
+              (candidate) => candidate.id && !candidate.synthetic,
+            );
+            const targetId = candidates[0]?.id ?? null;
+            const action = row.suggestedAction ?? "skip";
+            const response = await fetch(`/api/v1/import/rows/${row.id}/resolution`, {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                action,
+                payload: row.normalizedPayload,
+                targetId:
+                  action === "use_existing" || action === "replace_existing" ? targetId : null,
+              }),
+            });
+            if (!response.ok) {
+              const body = await response.json().catch(() => ({}));
+              throw new Error(
+                `${row.sourceSheet} row ${row.sourceRow}: ${body.error || "resolution failed"}`,
+              );
+            }
+          }),
         );
+      } catch (error) {
+        setBulkError(error instanceof Error ? error.message : "resolution failed");
         setBulkBusy(false);
         router.refresh();
         return;
