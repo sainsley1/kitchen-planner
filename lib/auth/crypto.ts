@@ -12,7 +12,10 @@ export function verifyPin(pin: string, encoded: string | null): boolean {
   if (algorithm !== "scrypt" || !saltHex || !hashHex) return false;
   try {
     const expected = Buffer.from(hashHex, "hex");
-    const actual = scryptSync(pin, Buffer.from(saltHex, "hex"), expected.length);
+    if (expected.length === 0) return false;
+    const salt = Buffer.from(saltHex, "hex");
+    if (salt.length === 0) return false;
+    const actual = scryptSync(pin, salt, expected.length);
     return expected.length === actual.length && timingSafeEqual(expected, actual);
   } catch {
     return false;
