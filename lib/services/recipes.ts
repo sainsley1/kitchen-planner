@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 import type { HouseholdSession } from "@/lib/auth/session";
 import { appConfig } from "@/lib/config";
-import { getPool } from "@/lib/db/client";
+import { poolOrThrow } from "@/lib/db/client";
 import {
   recipeImportDraftSchema,
   recipeImportRequestSchema,
@@ -20,13 +20,8 @@ const scheduleSchema = z.object({
   notes: z.string().trim().max(1000).nullable().default(null),
 });
 
-function pool() {
-  const value = getPool();
-  if (!value) throw new Error("Database is not configured");
-  return value;
-}
 async function transaction<T>(work: (client: PoolClient) => Promise<T>) {
-  const client = await pool().connect();
+  const client = await poolOrThrow().connect();
   try {
     await client.query("BEGIN");
     const result = await work(client);
@@ -204,11 +199,11 @@ async function finishImport(
 ) {
   const message = error instanceof Error ? error.message.slice(0, 2000) : null;
   if (message) {
-    await pool().query(
+    await poolOrThrow().query(
       `UPDATE ai_runs SET status='failed',error_message=$2,completed_at=now() WHERE id=$1`,
       [ids.runId, message],
     );
-    await pool().query(
+    await poolOrThrow().query(
       `UPDATE ai_jobs SET status='failed',error_message=$2,completed_at=now() WHERE id=$1`,
       [ids.jobId, message],
     );

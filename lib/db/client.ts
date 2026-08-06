@@ -21,3 +21,9 @@ export function getDatabase() {
   const activePool = getPool();
   return activePool ? drizzle(activePool, { schema }) : undefined;
 }
+
+export function poolOrThrow(): Pool {
+  const value = getPool();
+  if (!value) throw new Error("Database is not configured");
+  return value;
+}

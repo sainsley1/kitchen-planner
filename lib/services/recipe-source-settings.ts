@@ -1,7 +1,7 @@
 import "server-only";
 import type { HouseholdSession } from "@/lib/auth/session";
 import { recipeSourcePreferencesSchema, type RecipeSourcePreferences } from "@/lib/ai/contracts";
-import { getPool } from "@/lib/db/client";
+import { poolOrThrow } from "@/lib/db/client";
 
 const KEY = "recipe_source_preferences";
 const defaults: RecipeSourcePreferences = {
@@ -12,11 +12,6 @@ const defaults: RecipeSourcePreferences = {
   allowPaywalledSources: false,
   allowRegistrationSources: false,
 };
-function pool() {
-  const value = getPool();
-  if (!value) throw new Error("Database is not configured");
-  return value;
-}
 function domain(value: string) {
   const trimmed = value.trim().toLocaleLowerCase();
   if (!trimmed) return "";
@@ -39,7 +34,7 @@ function normalized(value: RecipeSourcePreferences): RecipeSourcePreferences {
   };
 }
 export async function getRecipeSourcePreferences(householdId: string) {
-  const result = await pool().query<{ value: unknown }>(
+  const result = await poolOrThrow().query<{ value: unknown }>(
     `SELECT value FROM app_settings WHERE household_id=$1 AND key=$2`,
     [householdId, KEY],
   );
@@ -49,7 +44,7 @@ export async function setRecipeSourcePreferences(actor: HouseholdSession, input:
   if (actor.role !== "owner")
     throw new Error("Only the household owner can change recipe-source settings");
   const next = normalized(recipeSourcePreferencesSchema.parse(input));
-  const client = await pool().connect();
+  const client = await poolOrThrow().connect();
   try {
     await client.query("BEGIN");
     const before = await client.query<{ value: unknown }>(
