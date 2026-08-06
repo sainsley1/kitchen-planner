@@ -11,7 +11,7 @@ export default async function LoginPage() {
         <span className="brand-mark">K</span>
         <span className="eyebrow">LAN household access</span>
         <h1>Welcome to your kitchen</h1>
-        <p>Choose your name and enter the PIN configured on WALLY.</p>
+        <p>Choose your name and enter your PIN.</p>
         <LoginForm displayNames={displayNames} />
       </div>
     </div>
