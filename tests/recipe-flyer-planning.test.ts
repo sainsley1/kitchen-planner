@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { weeklyPlanSchema, type WeeklyPlan, type WeeklyPlanRequest } from "../lib/ai/contracts";
 
 const state = vi.hoisted(() => ({ pool: null as unknown }));
-vi.mock("@/lib/db/client", () => ({ getPool: () => state.pool }));
+vi.mock("@/lib/db/client", () => ({ getPool: () => state.pool, poolOrThrow: () => state.pool }));
 vi.mock("@/lib/config", () => ({
   appConfig: {
     aiConfigured: false,

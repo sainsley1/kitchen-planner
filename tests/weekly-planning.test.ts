@@ -22,7 +22,7 @@ const state = vi.hoisted(() => ({
   calls: [] as Array<Record<string, unknown>>,
 }));
 
-vi.mock("@/lib/db/client", () => ({ getPool: () => state.pool }));
+vi.mock("@/lib/db/client", () => ({ getPool: () => state.pool, poolOrThrow: () => state.pool }));
 vi.mock("@/lib/config", () => ({
   appConfig: {
     aiConfigured: true,

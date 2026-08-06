@@ -4,6 +4,7 @@ import type { ZodType } from "zod";
 import type { HouseholdSession } from "@/lib/auth/session";
 import type { PlanningContext } from "@/lib/ai/context";
 import { appConfig } from "@/lib/config";
+import { poolOrThrow } from "@/lib/db/client";
 import { parseNumericQuantity } from "@/lib/format";
 import { getPool } from "@/lib/db/client";
 import { planningContext } from "@/lib/ai/context";
@@ -73,11 +74,6 @@ const ADVANCED_TARGETED_MAX_OUTPUT_TOKENS = 32_000;
 const ROUTINE_RECOVERY_MAX_OUTPUT_TOKENS = 32_000;
 const ADVANCED_RECOVERY_MAX_OUTPUT_TOKENS = 48_000;
 
-function pool() {
-  const value = getPool();
-  if (!value) throw new Error("Database is not configured");
-  return value;
-}
 function modelFor(tier: AiModelTier) {
   return tier === "fallback"
     ? appConfig.models.fallback
@@ -92,7 +88,7 @@ function errorMessage(error: unknown) {
   return (error instanceof Error ? error.message : "AI refinement failed").slice(0, 2000);
 }
 async function transaction<T>(work: (client: PoolClient) => Promise<T>) {
-  const client = await pool().connect();
+  const client = await poolOrThrow().connect();
   try {
     await client.query("BEGIN");
     const result = await work(client);
@@ -106,7 +102,7 @@ async function transaction<T>(work: (client: PoolClient) => Promise<T>) {
   }
 }
 async function ownedPlan(actor: Actor, id: string): Promise<OwnedPlan> {
-  const result = await pool().query<OwnedPlan>(
+  const result = await poolOrThrow().query<OwnedPlan>(
     `SELECT p.id,p.status,p.start_date::text AS "startDate",p.end_date::text AS "endDate",p.start_meal AS "startMeal",p.end_meal AS "endMeal",p.include_snacks AS "includeSnacks",p.include_desserts AS "includeDesserts",p.discover_recipes AS "discoverRecipes",p.normalized_request AS "normalizedRequest",p.current_payload AS payload,p.revision_number AS "revisionNumber",COALESCE((SELECT jsonb_agg(jsonb_build_object('url',s.source_url,'title',s.source_title,'domain',s.source_domain,'verifiedAt',s.verified_at::text)) FROM weekly_plan_recipe_sources s WHERE s.weekly_plan_id=p.id),'[]'::jsonb) AS "recipeSources" FROM weekly_plans p WHERE p.id=$1 AND p.household_id=$2 AND p.archived_at IS NULL`,
     [id, actor.householdId],
   );
@@ -157,7 +153,7 @@ async function failRunOnly(ids: { jobId: string; runId: string }, error: unknown
   const message = errorMessage(error);
   const usage = aiUsageFromError(error);
   if (usage)
-    await pool().query(
+    await poolOrThrow().query(
       `UPDATE ai_runs SET response_id=$2,status='failed',input_tokens=$3,cached_input_tokens=$4,output_tokens=$5,total_tokens=$6,estimated_cost_usd=$7,latency_ms=$8,web_search_calls=$9,web_source_count=$10,error_message=$11,completed_at=now() WHERE id=$1`,
       [
         ids.runId,
@@ -174,7 +170,7 @@ async function failRunOnly(ids: { jobId: string; runId: string }, error: unknown
       ],
     );
   else
-    await pool().query(
+    await poolOrThrow().query(
       `UPDATE ai_runs SET status='failed',error_message=$2,completed_at=now() WHERE id=$1`,
       [ids.runId, message],
     );
@@ -182,7 +178,7 @@ async function failRunOnly(ids: { jobId: string; runId: string }, error: unknown
 async function fail(ids: { jobId: string; runId: string }, error: unknown) {
   const message = errorMessage(error);
   await failRunOnly(ids, error);
-  await pool().query(
+  await poolOrThrow().query(
     `UPDATE ai_jobs SET status='failed',error_message=$2,completed_at=now() WHERE id=$1`,
     [ids.jobId, message],
   );
@@ -649,7 +645,7 @@ async function getExcludedDishesForMeal(
   if (currentDishName?.trim()) excluded.add(currentDishName.trim());
 
   try {
-    const suggestionRows = await pool().query<{ payload: unknown }>(
+    const suggestionRows = await poolOrThrow().query<{ payload: unknown }>(
       `SELECT payload FROM weekly_plan_suggestions WHERE weekly_plan_id = $1 AND target_meal_id = $2`,
       [planId, targetMealId],
     );
@@ -670,7 +666,7 @@ async function getExcludedDishesForMeal(
       }
     }
 
-    const revisionRows = await pool().query<{ payload: unknown }>(
+    const revisionRows = await poolOrThrow().query<{ payload: unknown }>(
       `SELECT payload FROM weekly_plan_revisions WHERE weekly_plan_id = $1 ORDER BY revision_number DESC LIMIT 10`,
       [planId],
     );
@@ -906,7 +902,7 @@ export async function applyWeeklyPlanSuggestion(
 ) {
   const { optionId } = weeklyPlanSuggestionApplySchema.parse(inputValue);
   const plan = await ownedPlan(actor, planId);
-  const row = await pool().query<{
+  const row = await poolOrThrow().query<{
     kind: "alternatives" | "recipe_link";
     targetMealId: string;
     payload: WeeklyPlanSuggestion;
@@ -1119,7 +1115,7 @@ export async function updateWeeklyPlanRecipeLink(actor: Actor, id: string, input
     };
     summary = `Removed recipe link from ${meal.dish}`;
   } else {
-    const recipe = await pool().query<{
+    const recipe = await poolOrThrow().query<{
       id: string;
       title: string;
       sourceUrl: string | null;

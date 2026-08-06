@@ -3,7 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ pool: null as unknown }));
-vi.mock("@/lib/db/client", () => ({ getPool: () => state.pool }));
+vi.mock("@/lib/db/client", () => ({ getPool: () => state.pool, poolOrThrow: () => state.pool }));
 
 import {
   registerGroceryShop,

@@ -6,7 +6,7 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 import type { HouseholdSession } from "@/lib/auth/session";
 import { appConfig } from "@/lib/config";
-import { getPool } from "@/lib/db/client";
+import { poolOrThrow } from "@/lib/db/client";
 import { attachmentInput, type AiAttachment } from "@/lib/ai/attachments";
 import {
   flyerExtractionSchema,
@@ -25,13 +25,8 @@ const FLYER_PROMPT = `Extract grocery sale items from the supplied flyer image, 
 const decisionSchema = z.object({ status: z.enum(["proposed", "accepted", "rejected"]) });
 const UPLOAD_ROOT = process.env.UPLOAD_ROOT ?? "/app/uploads";
 
-function pool() {
-  const value = getPool();
-  if (!value) throw new Error("Database is not configured");
-  return value;
-}
 async function transaction<T>(work: (client: PoolClient) => Promise<T>) {
-  const client = await pool().connect();
+  const client = await poolOrThrow().connect();
   try {
     await client.query("BEGIN");
     const result = await work(client);
@@ -133,11 +128,11 @@ async function failExtraction(ids: { jobId: string; runId: string }, error: unkn
     0,
     2000,
   );
-  await pool().query(
+  await poolOrThrow().query(
     `UPDATE ai_runs SET status='failed',error_message=$2,completed_at=now() WHERE id=$1`,
     [ids.runId, message],
   );
-  await pool().query(
+  await poolOrThrow().query(
     `UPDATE ai_jobs SET status='failed',error_message=$2,completed_at=now() WHERE id=$1`,
     [ids.jobId, message],
   );
@@ -277,7 +272,7 @@ export async function createFlyer(
     return { ...flyer, extracted: extraction.sales.length, warnings: extraction.warnings };
   } catch (error) {
     const warning = await failExtraction(ids, error);
-    await pool().query(
+    await poolOrThrow().query(
       `UPDATE flyer_sources SET extraction_warnings=extraction_warnings||$2::jsonb,updated_at=now() WHERE id=$1`,
       [flyer.id, JSON.stringify([`AI extraction failed: ${warning}`])],
     );
@@ -561,7 +556,7 @@ export async function commitFlyer(actor: HouseholdSession, id: string) {
   });
 }
 export async function getFlyerFile(actor: HouseholdSession, id: string) {
-  const result = await pool().query<{
+  const result = await poolOrThrow().query<{
     storagePath: string;
     mimeType: string;
     originalFilename: string;

@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({
   responses: [] as Array<{ value: unknown; usage: unknown }>,
 }));
 
-vi.mock("@/lib/db/client", () => ({ getPool: () => state.pool }));
+vi.mock("@/lib/db/client", () => ({ getPool: () => state.pool, poolOrThrow: () => state.pool }));
 vi.mock("@/lib/ai/provider", () => ({
   runStructured: async () => {
     const next = state.responses.shift();

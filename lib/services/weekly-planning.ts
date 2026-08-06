@@ -4,7 +4,7 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 import type { HouseholdSession } from "@/lib/auth/session";
 import { appConfig } from "@/lib/config";
-import { getPool } from "@/lib/db/client";
+import { poolOrThrow } from "@/lib/db/client";
 import { planningContext, type PlanningContext } from "@/lib/ai/context";
 import {
   weeklyNotesNormalizationSchema,
@@ -157,13 +157,8 @@ Planning requirements:
 
 Be specific about servings, leftover reserves, prep time, packed lunches, rationale, and ingredient requirements. Surface genuine uncertainty in warnings, but return at most 12 consolidated warnings for the entire plan; combine related ingredient or inventory uncertainty instead of emitting one warning per occurrence. Keep the response bounded: use a short title; keep summary to at most 120 words and strategy to at most 180 words; keep each rationale to at most 50 words; use null for notes unless they add essential non-duplicated information; keep guided preparation methods concise and cookable rather than essay-like; and keep each warning to one sentence. Do not repeat the same evidence, ingredient, method, or explanation across fields.`;
 
-function pool() {
-  const value = getPool();
-  if (!value) throw new Error("Database is not configured");
-  return value;
-}
 async function transaction<T>(work: (client: PoolClient) => Promise<T>) {
-  const client = await pool().connect();
+  const client = await poolOrThrow().connect();
   try {
     await client.query("BEGIN");
     const result = await work(client);
@@ -254,7 +249,7 @@ async function startPlanningFallbackRun(actor: Actor, jobId: string): Promise<Jo
 }
 
 async function failRunOnly(ids: JobRun, error: unknown) {
-  await pool().query(
+  await poolOrThrow().query(
     `UPDATE ai_runs SET status='failed',error_message=$2,completed_at=now() WHERE id=$1`,
     [ids.runId, message(error)],
   );
@@ -263,7 +258,7 @@ async function failRunOnly(ids: JobRun, error: unknown) {
 async function failRun(ids: JobRun, error: unknown, usage?: AiUsage) {
   const detail = message(error);
   if (usage)
-    await pool().query(
+    await poolOrThrow().query(
       `UPDATE ai_runs SET response_id=$2,status='failed',input_tokens=$3,cached_input_tokens=$4,output_tokens=$5,total_tokens=$6,estimated_cost_usd=$7,latency_ms=$8,web_search_calls=$9,web_source_count=$10,error_message=$11,completed_at=now() WHERE id=$1`,
       [
         ids.runId,
@@ -280,11 +275,11 @@ async function failRun(ids: JobRun, error: unknown, usage?: AiUsage) {
       ],
     );
   else
-    await pool().query(
+    await poolOrThrow().query(
       `UPDATE ai_runs SET status='failed',error_message=$2,completed_at=now() WHERE id=$1`,
       [ids.runId, detail],
     );
-  await pool().query(
+  await poolOrThrow().query(
     `UPDATE ai_jobs SET status='failed',error_message=$2,completed_at=now(),input_snapshot=jsonb_set(input_snapshot,'{stage}','"failed"'::jsonb,true) WHERE id=$1`,
     [ids.jobId, detail],
   );
@@ -313,25 +308,25 @@ async function finishRun(client: PoolClient, ids: JobRun, usage: AiUsage) {
 }
 
 async function failQueuedJob(jobId: string, error: unknown) {
-  await pool().query(
+  await poolOrThrow().query(
     `UPDATE ai_jobs SET status='failed',error_message=$2,completed_at=now(),input_snapshot=jsonb_set(input_snapshot,'{stage}','"failed"'::jsonb,true) WHERE id=$1 AND status IN ('queued','running')`,
     [jobId, message(error)],
   );
 }
 
 async function cancelRun(ids: JobRun) {
-  await pool().query(
+  await poolOrThrow().query(
     `UPDATE ai_runs SET status='cancelled',error_message='Cancelled by the household.',completed_at=now() WHERE id=$1 AND status='running'`,
     [ids.runId],
   );
-  await pool().query(
+  await poolOrThrow().query(
     `UPDATE ai_jobs SET status='cancelled',cancel_requested=true,error_message='Cancelled by the household.',completed_at=COALESCE(completed_at,now()),input_snapshot=jsonb_set(input_snapshot,'{stage}','"cancelled"'::jsonb,true) WHERE id=$1`,
     [ids.jobId],
   );
 }
 
 async function setJobStage(jobId: string, stage: string) {
-  await pool().query(
+  await poolOrThrow().query(
     `UPDATE ai_jobs SET input_snapshot=jsonb_set(input_snapshot,'{stage}',to_jsonb($2::text),true) WHERE id=$1 AND status='running'`,
     [jobId, stage],
   );
@@ -1082,7 +1077,7 @@ export async function queueWeeklyPlan(actor: Actor, input: unknown): Promise<Wee
       "OpenAI is not configured. Add OPENAI_API_KEY to .env and run ./unraid.sh update.",
     );
   const request = weeklyPlanRequestSchema.parse(input);
-  const date = await pool().query<{ today: string }>(
+  const date = await poolOrThrow().query<{ today: string }>(
     `SELECT (now() AT TIME ZONE timezone)::date::text AS today FROM households WHERE id=$1`,
     [actor.householdId],
   );
@@ -1096,7 +1091,7 @@ export async function queueWeeklyPlan(actor: Actor, input: unknown): Promise<Wee
     originalNotes: request.notes,
   };
   try {
-    const created = await pool().query<{ id: string }>(
+    const created = await poolOrThrow().query<{ id: string }>(
       `INSERT INTO ai_jobs (household_id,actor_user_id,workflow,status,input_text,input_snapshot) VALUES ($1,$2,'weekly_planning','queued',$3,$4::jsonb) RETURNING id`,
       [actor.householdId, actor.userId, request.notes || null, JSON.stringify(snapshot)],
     );
@@ -1114,7 +1109,7 @@ export async function queueWeeklyPlan(actor: Actor, input: unknown): Promise<Wee
 }
 
 async function claimWeeklyPlanJob(jobId: string) {
-  const result = await pool().query<{
+  const result = await poolOrThrow().query<{
     householdId: string;
     actorUserId: string;
     displayName: string;
@@ -1139,7 +1134,7 @@ async function claimWeeklyPlanJob(jobId: string) {
 export async function processWeeklyPlanJob(jobId: string): Promise<WeeklyPlanJobStatus> {
   const claimed = await claimWeeklyPlanJob(jobId);
   if (!claimed) {
-    const existing = await pool().query<{ householdId: string }>(
+    const existing = await poolOrThrow().query<{ householdId: string }>(
       `SELECT household_id AS "householdId" FROM ai_jobs WHERE id=$1 AND workflow='weekly_planning'`,
       [jobId],
     );
@@ -1238,7 +1233,7 @@ export async function processWeeklyPlanJob(jobId: string): Promise<WeeklyPlanJob
         timeoutMs: appConfig.planningTimeoutMs,
       });
     }
-    const active = await pool().query<{ status: string; cancelRequested: boolean }>(
+    const active = await poolOrThrow().query<{ status: string; cancelRequested: boolean }>(
       `SELECT status,cancel_requested AS "cancelRequested" FROM ai_jobs WHERE id=$1`,
       [jobId],
     );
@@ -1321,7 +1316,7 @@ export async function processWeeklyPlanJob(jobId: string): Promise<WeeklyPlanJob
     if (error instanceof PlanningCancelled || controller.signal.aborted) {
       if (ids) await cancelRun(ids);
       else
-        await pool().query(
+        await poolOrThrow().query(
           `UPDATE ai_jobs SET status='cancelled',cancel_requested=true,error_message='Cancelled by the household.',completed_at=now(),input_snapshot=jsonb_set(input_snapshot,'{stage}','"cancelled"'::jsonb,true) WHERE id=$1`,
           [jobId],
         );
@@ -1346,7 +1341,7 @@ export function scheduleWeeklyPlanJob(jobId: string) {
 }
 
 export async function getWeeklyPlanJob(actor: Actor, id: string): Promise<WeeklyPlanJobStatus> {
-  const result = await pool().query<WeeklyPlanJobStatus>(
+  const result = await poolOrThrow().query<WeeklyPlanJobStatus>(
     `
     SELECT j.id,j.status,j.input_snapshot->>'stage' AS stage,
            j.input_snapshot#>>'{request,startDate}' AS "startDate",j.input_snapshot#>>'{request,endDate}' AS "endDate",
@@ -1366,13 +1361,13 @@ export async function getWeeklyPlanJob(actor: Actor, id: string): Promise<Weekly
 
 export async function cancelWeeklyPlanJob(actor: Actor, id: string) {
   const jobId = weeklyPlanJobIdSchema.parse(id);
-  const result = await pool().query<{ status: string }>(
+  const result = await poolOrThrow().query<{ status: string }>(
     `UPDATE ai_jobs SET status='cancelled',cancel_requested=true,error_message='Cancelled by the household.',completed_at=now(),input_snapshot=jsonb_set(input_snapshot,'{stage}','"cancelled"'::jsonb,true) WHERE id=$1 AND household_id=$2 AND workflow='weekly_planning' AND input_snapshot->>'jobKind'='weekly_plan_generation' AND status IN ('queued','running') RETURNING status`,
     [jobId, actor.householdId],
   );
   if (!result.rows[0]) throw new Error("Only a queued or running weekly plan can be cancelled");
   planningControllers.get(jobId)?.abort();
-  await pool().query(
+  await poolOrThrow().query(
     `UPDATE ai_runs SET status='cancelled',error_message='Cancelled by the household.',completed_at=now() WHERE job_id=$1 AND status='running'`,
     [jobId],
   );
@@ -1477,7 +1472,7 @@ export async function generateWeeklyPlan(actor: Actor, input: unknown) {
 }
 
 async function ownedPlan(actor: Actor, id: string) {
-  const result = await pool().query(
+  const result = await poolOrThrow().query(
     `SELECT p.id,p.household_id AS "householdId",p.job_id AS "jobId",p.start_date::text AS "startDate",p.end_date::text AS "endDate",p.start_meal AS "startMeal",p.end_meal AS "endMeal",p.include_snacks AS "includeSnacks",p.include_desserts AS "includeDesserts",p.discover_recipes AS "discoverRecipes",p.status,p.original_request AS "originalRequest",p.normalized_request AS "normalizedRequest",p.current_payload AS payload,p.validation_issues AS issues,p.revision_number AS "revisionNumber",p.created_at::text AS "createdAt",p.updated_at::text AS "updatedAt",p.committed_at::text AS "committedAt",COALESCE((SELECT jsonb_agg(jsonb_build_object('url',s.source_url,'title',s.source_title,'domain',s.source_domain,'verifiedAt',s.verified_at::text) ORDER BY s.verified_at,s.id) FROM weekly_plan_recipe_sources s WHERE s.weekly_plan_id=p.id),'[]'::jsonb) AS "recipeSources" FROM weekly_plans p WHERE p.id=$1 AND p.household_id=$2 AND p.archived_at IS NULL`,
     [id, actor.householdId],
   );
@@ -1580,7 +1575,7 @@ export async function restoreWeeklyPlanRevision(actor: Actor, id: string, input:
   const current = await ownedPlan(actor, id);
   if (current.status !== "draft")
     throw new Error("Only a draft weekly plan can restore a revision");
-  const source = await pool().query<{ payload: WeeklyPlan }>(
+  const source = await poolOrThrow().query<{ payload: WeeklyPlan }>(
     `SELECT payload FROM weekly_plan_revisions r JOIN weekly_plans p ON p.id=r.weekly_plan_id WHERE r.weekly_plan_id=$1 AND r.revision_number=$2 AND p.household_id=$3`,
     [id, value.revisionNumber, actor.householdId],
   );

@@ -1,13 +1,7 @@
 import "server-only";
-import { getPool } from "@/lib/db/client";
+import { poolOrThrow } from "@/lib/db/client";
 import { inferDirectMealUse, type DirectMealUse } from "@/lib/ai/inventory-meal-capability";
 import { parseNumericQuantity } from "@/lib/format";
-
-function pool() {
-  const value = getPool();
-  if (!value) throw new Error("Database is not configured");
-  return value;
-}
 
 export type QuickContext = {
   today: string;
@@ -142,19 +136,19 @@ export function compactQuickContext(text: string, context: QuickContext) {
 
 export async function quickContext(householdId: string): Promise<QuickContext> {
   const [today, inventory, locations, shopping] = await Promise.all([
-    pool().query<{ today: string }>(
+    poolOrThrow().query<{ today: string }>(
       "SELECT (now() AT TIME ZONE timezone)::date::text AS today FROM households WHERE id=$1",
       [householdId],
     ),
-    pool().query<QuickContext["inventory"][number]>(
+    poolOrThrow().query<QuickContext["inventory"][number]>(
       `SELECT i.id,i.ingredient,i.brand_variety AS "brandVariety",i.category,i.quantity::text,i.unit,l.name AS "locationName",i.storage_location_id AS "storageLocationId",i.storage_detail AS "storageDetail",i.package_state AS "packageState",i.priority,i.notes FROM inventory_entries i LEFT JOIN storage_locations l ON l.id=i.storage_location_id WHERE i.household_id=$1 AND i.archived_at IS NULL ORDER BY lower(i.ingredient)`,
       [householdId],
     ),
-    pool().query<QuickContext["locations"][number]>(
+    poolOrThrow().query<QuickContext["locations"][number]>(
       `SELECT id,name,detail FROM storage_locations WHERE household_id=$1 AND active=true ORDER BY sort_order,name,detail`,
       [householdId],
     ),
-    pool().query<QuickContext["shopping"][number]>(
+    poolOrThrow().query<QuickContext["shopping"][number]>(
       `SELECT id,item,category,quantity::text,unit,status,notes FROM shopping_items WHERE household_id=$1 AND status<>'removed' ORDER BY lower(item)`,
       [householdId],
     ),
@@ -207,19 +201,19 @@ export function compactFeedbackContext(text: string, context: FeedbackContext) {
 }
 export async function feedbackContext(householdId: string): Promise<FeedbackContext> {
   const [today, users, feedback, preferences] = await Promise.all([
-    pool().query<{ today: string }>(
+    poolOrThrow().query<{ today: string }>(
       "SELECT (now() AT TIME ZONE timezone)::date::text AS today FROM households WHERE id=$1",
       [householdId],
     ),
-    pool().query<{ id: string; displayName: string }>(
+    poolOrThrow().query<{ id: string; displayName: string }>(
       `SELECT id,display_name AS "displayName" FROM household_users WHERE household_id=$1 AND active=true ORDER BY display_name`,
       [householdId],
     ),
-    pool().query(
+    poolOrThrow().query(
       `SELECT f.feedback_date::text AS "feedbackDate",f.dish,f.rating,f.feedback,f.next_time_changes AS "nextTimeChanges",f.repeat_decision AS "repeatDecision",u.display_name AS person FROM meal_feedback f LEFT JOIN household_users u ON u.id=f.user_id WHERE f.household_id=$1 ORDER BY f.feedback_date DESC,f.created_at DESC LIMIT 50`,
       [householdId],
     ),
-    pool().query(
+    poolOrThrow().query(
       `SELECT p.topic,p.classification,p.detail,p.context,p.status,u.display_name AS person FROM food_preferences p LEFT JOIN household_users u ON u.id=p.user_id WHERE p.household_id=$1 AND p.status<>'superseded' ORDER BY p.effective_date DESC,p.created_at DESC LIMIT 200`,
       [householdId],
     ),
@@ -305,15 +299,15 @@ export async function groceryContext(
   shoppingItemIds: string[],
 ): Promise<GroceryContext> {
   const [shopping, inventory, locations] = await Promise.all([
-    pool().query<GroceryContext["shopping"][number]>(
+    poolOrThrow().query<GroceryContext["shopping"][number]>(
       `SELECT id,item,category,quantity::text,unit,notes,inventory_entry_id AS "inventoryEntryId" FROM shopping_items WHERE household_id=$1 AND id=ANY($2::uuid[]) AND status='purchased' ORDER BY lower(item)`,
       [householdId, shoppingItemIds],
     ),
-    pool().query<GroceryContext["inventory"][number]>(
+    poolOrThrow().query<GroceryContext["inventory"][number]>(
       `SELECT i.id,i.ingredient,i.brand_variety AS "brandVariety",i.category,i.quantity::text,i.unit,i.storage_location_id AS "storageLocationId",i.storage_detail AS "storageDetail",i.package_state AS "packageState",i.priority,l.name AS "locationName",i.archived_at::text AS "archivedAt" FROM inventory_entries i LEFT JOIN storage_locations l ON l.id=i.storage_location_id WHERE i.household_id=$1 AND (i.archived_at IS NULL OR i.id IN (SELECT s.inventory_entry_id FROM shopping_items s WHERE s.household_id=$1 AND s.id=ANY($2::uuid[]) AND s.inventory_entry_id IS NOT NULL)) ORDER BY i.archived_at NULLS FIRST,lower(i.ingredient)`,
       [householdId, shoppingItemIds],
     ),
-    pool().query<GroceryContext["locations"][number]>(
+    poolOrThrow().query<GroceryContext["locations"][number]>(
       `SELECT id,name,detail FROM storage_locations WHERE household_id=$1 AND active=true ORDER BY sort_order,name,detail`,
       [householdId],
     ),
@@ -629,51 +623,51 @@ export async function planningContext(
     recipes,
     activeSales,
   ] = await Promise.all([
-    pool().query<{ today: string; timeZone: string }>(
+    poolOrThrow().query<{ today: string; timeZone: string }>(
       `SELECT (now() AT TIME ZONE timezone)::date::text AS today,timezone AS "timeZone" FROM households WHERE id=$1`,
       [householdId],
     ),
-    pool().query<PlanningContext["users"][number]>(
+    poolOrThrow().query<PlanningContext["users"][number]>(
       `SELECT id,display_name AS "displayName" FROM household_users WHERE household_id=$1 AND active=true ORDER BY display_name`,
       [householdId],
     ),
-    pool().query<InventoryRow>(
+    poolOrThrow().query<InventoryRow>(
       `SELECT i.id,i.ingredient,i.brand_variety AS "brandVariety",i.category,i.quantity::text,i.unit,i.package_state AS "packageState",i.priority,l.name AS "locationName",i.storage_detail AS "storageDetail",i.best_before::text AS "bestBefore",substring(i.notes for 500) AS notes FROM inventory_entries i LEFT JOIN storage_locations l ON l.id=i.storage_location_id WHERE i.household_id=$1 AND i.archived_at IS NULL ORDER BY CASE i.priority WHEN 'use_now' THEN 0 WHEN 'use_soon' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,i.best_before NULLS LAST,lower(i.ingredient) LIMIT 300`,
       [householdId],
     ),
-    pool().query<InventoryRow>(
+    poolOrThrow().query<InventoryRow>(
       `SELECT i.id,i.ingredient,i.brand_variety AS "brandVariety",i.category,i.quantity::text,i.unit,i.package_state AS "packageState",i.priority,l.name AS "locationName",i.storage_detail AS "storageDetail",i.best_before::text AS "bestBefore",substring(i.notes for 500) AS notes FROM inventory_entries i LEFT JOIN storage_locations l ON l.id=i.storage_location_id WHERE i.household_id=$1 AND i.archived_at IS NULL AND (lower(i.category)~'(sauce|condiment|spice|seasoning|oil|vinegar|paste|aromatic|herb)' OR lower(i.ingredient)~'(sauce|paste|oil|vinegar|miso|gochujang|harissa|tahini|mustard|chutney|sambal|garlic|ginger|shallot|scallion|cardamom|cinnamon)') ORDER BY CASE i.priority WHEN 'use_now' THEN 0 WHEN 'use_soon' THEN 1 ELSE 2 END,lower(i.category),lower(i.ingredient) LIMIT 100`,
       [householdId],
     ),
-    pool().query<PlanningContext["preferences"][number]>(
+    poolOrThrow().query<PlanningContext["preferences"][number]>(
       `SELECT p.user_id AS "userId",u.display_name AS person,p.topic,p.classification,p.detail,p.context,p.status FROM food_preferences p LEFT JOIN household_users u ON u.id=p.user_id WHERE p.household_id=$1 AND p.status<>'superseded' ORDER BY CASE p.classification WHEN 'hard_constraint' THEN 0 WHEN 'strong_preference' THEN 1 ELSE 2 END,p.effective_date DESC LIMIT 150`,
       [householdId],
     ),
-    pool().query<PlanningContext["feedback"][number]>(
+    poolOrThrow().query<PlanningContext["feedback"][number]>(
       `SELECT u.display_name AS person,f.feedback_date::text AS "feedbackDate",f.dish,f.rating,f.feedback,f.next_time_changes AS "nextTimeChanges",f.repeat_decision AS "repeatDecision" FROM meal_feedback f LEFT JOIN household_users u ON u.id=f.user_id WHERE f.household_id=$1 ORDER BY f.feedback_date DESC,f.created_at DESC LIMIT 60`,
       [householdId],
     ),
-    pool().query<PlanningContext["recentMeals"][number]>(
+    poolOrThrow().query<PlanningContext["recentMeals"][number]>(
       `SELECT m.meal_date::text AS "mealDate",m.meal_type AS "mealType",u.display_name AS person,m.dish,m.status,r.title AS "recipeTitle" FROM meal_plan_entries m LEFT JOIN household_users u ON u.id=m.assigned_user_id LEFT JOIN recipes r ON r.id=m.recipe_id WHERE m.household_id=$1 AND m.meal_date>=($2::date-56) AND m.meal_date<$2::date AND m.meal_type IN ('breakfast','lunch','dinner') AND m.status IN ('planned','completed','changed') ORDER BY m.meal_date DESC,m.updated_at DESC LIMIT 250`,
       [householdId, startDate],
     ),
-    pool().query<PlanningContext["existingMeals"][number]>(
+    poolOrThrow().query<PlanningContext["existingMeals"][number]>(
       `SELECT m.id,m.meal_date::text AS "mealDate",m.meal_type AS "mealType",m.assigned_user_id AS "assignedUserId",u.display_name AS person,m.dish,m.planned_yield AS "plannedYield",m.packed_lunch AS "packedLunch",m.status FROM meal_plan_entries m LEFT JOIN household_users u ON u.id=m.assigned_user_id WHERE m.household_id=$1 AND m.archived_at IS NULL AND m.status='planned' AND m.meal_date BETWEEN $2::date AND $3::date ORDER BY m.meal_date,m.meal_type,u.display_name`,
       [householdId, startDate, endDate],
     ),
-    pool().query<PlanningContext["unscheduled"][number]>(
+    poolOrThrow().query<PlanningContext["unscheduled"][number]>(
       `SELECT x.id,x.week_start::text AS "weekStart",x.item_type AS "itemType",x.assigned_user_id AS "assignedUserId",u.display_name AS person,x.title,x.planned_yield AS "plannedYield",x.notes FROM unscheduled_items x LEFT JOIN household_users u ON u.id=x.assigned_user_id WHERE x.household_id=$1 AND x.status IN ('planned','open','unconfirmed') AND x.week_start BETWEEN ($2::date-7) AND $3::date ORDER BY x.week_start,x.item_type,lower(x.title) LIMIT 100`,
       [householdId, startDate, endDate],
     ),
-    pool().query<PlanningContext["shopping"][number]>(
+    poolOrThrow().query<PlanningContext["shopping"][number]>(
       `SELECT id,item,category,quantity::text,unit,status,notes FROM shopping_items WHERE household_id=$1 AND status IN ('to_buy','deferred') ORDER BY CASE status WHEN 'to_buy' THEN 0 ELSE 1 END,lower(item) LIMIT 150`,
       [householdId],
     ),
-    pool().query<PlanningContext["recipes"][number]>(
+    poolOrThrow().query<PlanningContext["recipes"][number]>(
       `SELECT r.id,r.title,r.source_type AS "sourceType",r.source_url AS "sourceUrl",substring(r.description for 500) AS description,r.cuisine,r.meal_types AS "mealTypes",r.planned_yield AS "plannedYield",r.servings,r.prep_minutes AS "prepMinutes",r.cook_minutes AS "cookMinutes",COALESCE((SELECT jsonb_agg(jsonb_build_object('item',x.entry->>'item','quantity',x.entry->'quantity','unit',x.entry->>'unit','optional',COALESCE((x.entry->>'optional')::boolean,false)) ORDER BY x.ordinality) FROM (SELECT entry,ordinality FROM jsonb_array_elements(r.ingredients) WITH ORDINALITY AS ingredient(entry,ordinality) ORDER BY ordinality LIMIT 40) x),'[]'::jsonb) AS ingredients,r.tags[1:20] AS tags,substring(r.notes for 700) AS notes,r.favorite,r.recipe_status AS "recipeStatus",r.freezer_friendly AS "freezerFriendly",r.leftover_friendly AS "leftoverFriendly",r.packed_lunch_friendly AS "packedLunchFriendly",(SELECT count(*)::int FROM meal_feedback f WHERE f.recipe_id=r.id) AS "feedbackCount" FROM recipes r WHERE r.household_id=$1 AND r.archived_at IS NULL AND r.recipe_status<>'avoid' ORDER BY r.favorite DESC,CASE r.recipe_status WHEN 'proven' THEN 0 ELSE 1 END,(SELECT count(*) FROM meal_feedback f WHERE f.recipe_id=r.id) DESC,r.updated_at DESC LIMIT 60`,
       [householdId],
     ),
-    pool().query<SaleRow>(
+    poolOrThrow().query<SaleRow>(
       `SELECT s.id,f.store_name AS "storeName",f.store_location AS "storeLocation",f.valid_from::text AS "validFrom",f.valid_until::text AS "validUntil",s.item,s.brand,s.category,s.package_size AS "packageSize",s.price::text,s.regular_price::text AS "regularPrice",s.savings_amount::text AS "savingsAmount",s.discount_percent::text AS "discountPercent",s.pricing_unit AS "pricingUnit",s.multi_buy_quantity AS "multiBuyQuantity",s.member_only AS "memberOnly",s.limit_text AS "limitText",substring(s.notes for 500) AS notes,s.prioritized,s.deal_grade AS "dealGrade",s.normalized_unit_price::text AS "normalizedUnitPrice",s.normalized_unit_measure AS "normalizedUnitMeasure",s.estimated_regular_price::text AS "estimatedRegularPrice" FROM flyer_sale_items s JOIN flyer_sources f ON f.id=s.flyer_source_id WHERE s.household_id=$1 AND s.status='accepted' AND f.status='committed' AND f.archived_at IS NULL AND f.valid_until>=$2::date AND f.valid_from<=$3::date ORDER BY s.prioritized DESC,f.valid_until,lower(f.store_name),lower(s.item)`,
       [householdId, startDate, endDate],
     ),
