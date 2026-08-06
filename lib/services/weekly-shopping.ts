@@ -2,6 +2,7 @@ import "server-only";
 import type { PlanningContext } from "@/lib/ai/context";
 import type { WeeklyPlan } from "@/lib/ai/contracts";
 import { boundWeeklyPlanWarnings } from "@/lib/services/weekly-warnings";
+import { parseNumericQuantity } from "@/lib/format";
 
 export const AUTO_SHORTFALL_PREFIX = "auto-shortfall-";
 export const AUTO_REQUIREMENT_PREFIX = "auto-requirement-";
@@ -240,10 +241,6 @@ export function normalizeWeeklyPlanMealLinkedRecords(plan: WeeklyPlan): WeeklyPl
     prepTasks,
   };
 }
-function finiteQuantity(value: number | string | null | undefined) {
-  const parsed = value == null ? NaN : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
 function lineMatches(line: ShoppingLike, ingredient: string, unitKey: string) {
   if (!namesMatch(line.item, ingredient)) return false;
   const lineUnit = normalizedShoppingUnit(line.unit);
@@ -251,7 +248,7 @@ function lineMatches(line: ShoppingLike, ingredient: string, unitKey: string) {
 }
 function lineCovers(line: ShoppingLike, ingredient: string, unitKey: string, quantity: number) {
   if (!namesMatch(line.item, ingredient)) return false;
-  const current = finiteQuantity(line.quantity);
+  const current = parseNumericQuantity(line.quantity);
   const lineUnit = normalizedShoppingUnit(line.unit);
   if (current == null || !lineUnit) return true;
   const converted = convertIngredientQuantity(current, lineUnit, unitKey);
@@ -261,7 +258,7 @@ function safeSlug(value: string) {
   return normalizedName(value).replace(/\s+/g, "-").slice(0, 50) || "ingredient";
 }
 function recordedAmount(item: PlanningContext["inventory"][number]) {
-  const quantity = finiteQuantity(item.quantity);
+  const quantity = parseNumericQuantity(item.quantity);
   if (quantity == null || quantity <= 0) return null;
   return `${Number(quantity.toFixed(3))}${item.unit ? ` ${item.unit}` : " recorded unit(s)"}`;
 }
@@ -292,7 +289,7 @@ function preferredInventory(
   const candidates = matchingInventory(item, inventoryEntryId, context);
   if (!candidates.length) return null;
   const availableCandidates = candidates.filter((entry) => {
-    const qty = finiteQuantity(entry.quantity);
+    const qty = parseNumericQuantity(entry.quantity);
     return qty == null || qty > 0;
   });
   const pool = availableCandidates.length ? availableCandidates : candidates;
@@ -410,7 +407,7 @@ function enrichMealRequirements(plan: WeeklyPlan, context: PlanningContext): Wee
           ingredientUnitsComparable(entry.unit, requirement.unit),
         );
         for (const candidate of comparable) {
-          const available = finiteQuantity(candidate.quantity);
+          const available = parseNumericQuantity(candidate.quantity);
           if (available == null || available <= 0) continue;
           const availableInRequirementUnit = convertIngredientQuantity(
             available,
@@ -507,7 +504,7 @@ function reconcileInventoryUseShortfalls(
   const grouped = new Map<string, Shortfall>();
   for (const [inventoryId, use] of useByEntry) {
     const item = inventory.get(inventoryId);
-    const available = finiteQuantity(item?.quantity);
+    const available = parseNumericQuantity(item?.quantity);
     if (
       !item ||
       available == null ||
@@ -557,7 +554,7 @@ function reconcileInventoryUseShortfalls(
     );
     const mealIds = [...shortage.mealIds];
     if (existing) {
-      const current = finiteQuantity(existing.quantity);
+      const current = parseNumericQuantity(existing.quantity);
       const currentInShortageUnit =
         current == null ? null : convertIngredientQuantity(current, existing.unit, shortage.unit);
       if (currentInShortageUnit != null && currentInShortageUnit < shortage.quantity) {
@@ -705,7 +702,7 @@ function reconcileIngredientRequirements(
     }
     if (
       [...namedPlanLines, ...namedActiveLines].some(
-        (line) => finiteQuantity(line.quantity) == null || !normalizedShoppingUnit(line.unit),
+        (line) => parseNumericQuantity(line.quantity) == null || !normalizedShoppingUnit(line.unit),
       )
     )
       continue;
@@ -716,12 +713,12 @@ function reconcileIngredientRequirements(
     )
       continue;
     const inventoryAvailable = inventory.reduce((total, entry) => {
-      const quantity = finiteQuantity(entry.quantity);
+      const quantity = parseNumericQuantity(entry.quantity);
       if (quantity == null) return total;
       return total + (convertIngredientQuantity(quantity, entry.unit, requirement.unitKey) ?? 0);
     }, 0);
     const shoppingAvailable = [...planLines, ...activeLines].reduce((total, line) => {
-      const quantity = finiteQuantity(line.quantity);
+      const quantity = parseNumericQuantity(line.quantity);
       if (quantity == null) return total;
       return total + (convertIngredientQuantity(quantity, line.unit, requirement.unitKey) ?? 0);
     }, 0);
@@ -750,7 +747,7 @@ function reconcileIngredientRequirements(
       lineMatches(line, requirement.item, requirement.unitKey),
     );
     if (existing) {
-      const current = finiteQuantity(existing.quantity);
+      const current = parseNumericQuantity(existing.quantity);
       const currentInRequirementUnit =
         current == null
           ? 0

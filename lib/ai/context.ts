@@ -1,6 +1,7 @@
 import "server-only";
 import { poolOrThrow } from "@/lib/db/client";
 import { inferDirectMealUse, type DirectMealUse } from "@/lib/ai/inventory-meal-capability";
+import { parseNumericQuantity } from "@/lib/format";
 
 export type QuickContext = {
   today: string;
@@ -472,10 +473,6 @@ function overlap(left: Set<string>, right: Set<string>) {
   for (const word of left) if (right.has(word)) return true;
   return false;
 }
-function numeric(value: string | null) {
-  const parsed = value == null ? NaN : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
 function rankSaleOpportunities(
   sales: Array<
     Omit<PlanningContext["activeSales"][number], "opportunityScore" | "opportunityReasons">
@@ -541,11 +538,11 @@ function rankSaleOpportunities(
           `$${Number(sale.normalizedUnitPrice).toFixed(2)} / ${sale.normalizedUnitMeasure}`,
         );
       }
-      const discount = numeric(sale.discountPercent);
+      const discount = parseNumericQuantity(sale.discountPercent);
       if (discount != null && discount > 0) {
         score += Math.min(discount / 2, 25);
         reasons.push(`${Number(discount.toFixed(1))}% advertised discount`);
-      } else if (numeric(sale.savingsAmount)) {
+      } else if (parseNumericQuantity(sale.savingsAmount)) {
         score += 4;
         reasons.push("advertised savings recorded");
       }

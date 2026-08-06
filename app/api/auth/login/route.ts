@@ -9,20 +9,23 @@ const loginSchema = z.object({
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
 export async function POST(request: NextRequest) {
-  const key = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "lan-client";
+  const parsed = loginSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success)
+    return NextResponse.json({ error: "Enter a household member and PIN." }, { status: 400 });
+
+  const key = parsed.data.displayName.toLowerCase();
   const now = Date.now();
   const prior = attempts.get(key);
+
   if (prior && prior.resetAt > now && prior.count >= 10) {
     return NextResponse.json(
       { error: "Too many attempts. Try again in 15 minutes." },
       { status: 429 },
     );
   }
+
   if (!prior || prior.resetAt <= now) attempts.set(key, { count: 0, resetAt: now + 15 * 60_000 });
 
-  const parsed = loginSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success)
-    return NextResponse.json({ error: "Enter a household member and PIN." }, { status: 400 });
   const user = await authenticateUser(parsed.data.displayName, parsed.data.pin);
   if (!user) {
     const active = attempts.get(key)!;

@@ -5,6 +5,8 @@ import type { HouseholdSession } from "@/lib/auth/session";
 import type { PlanningContext } from "@/lib/ai/context";
 import { appConfig } from "@/lib/config";
 import { poolOrThrow } from "@/lib/db/client";
+import { parseNumericQuantity } from "@/lib/format";
+import { getPool } from "@/lib/db/client";
 import { planningContext } from "@/lib/ai/context";
 import {
   recipeLinkActionSchema,
@@ -354,12 +356,8 @@ function recipeShoppingId(mealId: string, item: string, index: number) {
   const slug = normalizedItemName(item).replace(/\s+/g, "-").slice(0, 50) || "ingredient";
   return `recipe-${mealId}-${slug}-${index + 1}`.slice(0, 100);
 }
-function numericQuantity(value: number | string | null | undefined) {
-  const parsed = value == null ? NaN : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
 function recordedAmount(value: { quantity: number | string | null; unit: string | null }) {
-  const quantity = numericQuantity(value.quantity);
+  const quantity = parseNumericQuantity(value.quantity);
   if (quantity == null || quantity <= 0) return null;
   return `${Number(quantity.toFixed(3))}${value.unit ? ` ${value.unit}` : " recorded unit(s)"}`;
 }
@@ -418,19 +416,19 @@ function ensureRecipeShopping(
     if (
       shoppingRecords.some(
         (line) =>
-          numericQuantity(line.quantity) == null ||
+          parseNumericQuantity(line.quantity) == null ||
           !normalizedShoppingUnit(line.unit) ||
           !ingredientUnitsComparable(line.unit, requirementUnit),
       )
     )
       continue;
     const inventoryCovered = inventory.reduce((total, line) => {
-      const quantity = numericQuantity(line.quantity);
+      const quantity = parseNumericQuantity(line.quantity);
       if (quantity == null) return total;
       return total + (convertIngredientQuantity(quantity, line.unit, requirementUnit) ?? 0);
     }, 0);
     const shoppingCovered = shoppingRecords.reduce((total, line) => {
-      const quantity = numericQuantity(line.quantity);
+      const quantity = parseNumericQuantity(line.quantity);
       if (quantity == null) return total;
       return total + (convertIngredientQuantity(quantity, line.unit, requirementUnit) ?? 0);
     }, 0);
