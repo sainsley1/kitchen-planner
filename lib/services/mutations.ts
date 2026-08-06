@@ -670,67 +670,92 @@ export async function bulkUpdateInventory(actor: Actor, ids: string[], input: un
     const changedFields = fields.filter(([key]) =>
       Object.prototype.hasOwnProperty.call(patch, key),
     );
-    const updated: unknown[] = [];
+    if (uniqueIds.length === 0) return { count: 0, items: [] };
 
-    for (const id of uniqueIds) {
-      const before = await getOwned(client, "inventory_entries", id, actor.householdId);
-      const values: unknown[] = [id, actor.householdId];
-      const setters = changedFields.map(([key, column]) => {
-        values.push(patch[key]);
-        return `${column}=$${values.length}`;
-      });
-      setters.push("verified_at=now()", "updated_at=now()");
-      const result = await client.query(
-        `UPDATE inventory_entries SET ${setters.join(",")} WHERE id=$1 AND household_id=$2 RETURNING *`,
-        values,
-      );
+    // Batch BEFORE state fetching and authorization checks
+    const beforeResult = await client.query(
+      "SELECT * FROM inventory_entries WHERE id = ANY($1::uuid[]) AND household_id=$2 FOR UPDATE",
+      [uniqueIds, actor.householdId]
+    );
+    if (beforeResult.rows.length !== uniqueIds.length) {
+      // Re-trigger the exact missing record error by falling back to sequential getOwned if any are missing
+      for (const id of uniqueIds) {
+        await getOwned(client, "inventory_entries", id, actor.householdId);
+      }
+    }
+    const beforeMap = new Map(beforeResult.rows.map(r => [r.id, r]));
+
+    const values = [actor.householdId, ...changedFields.map(([key]) => patch[key as keyof typeof patch])];
+    const setters = changedFields.map(([key, column], i) => column + "=$" + (i + 3));
+    setters.push("verified_at=now()", "updated_at=now()");
+
+    const result = await client.query(
+      `UPDATE inventory_entries SET ${setters.join(",")} WHERE id = ANY($1::uuid[]) AND household_id=$2 RETURNING *`,
+      [uniqueIds, ...values]
+    );
+
+    for (const row of result.rows) {
       await audit(
         client,
         actor,
         "bulk_update",
         "inventory_entry",
-        id,
-        before,
-        result.rows[0],
-        `Bulk changed: ${changedFields.map(([key]) => key).join(", ")}`,
+        row.id,
+        beforeMap.get(row.id),
+        row,
+        `Bulk changed: ${changedFields.map(([key]) => key).join(", ")}`
       );
-      updated.push(result.rows[0]);
     }
-    return { count: updated.length, items: updated };
+
+    return { count: result.rows.length, items: result.rows };
   });
 }
 
 export async function bulkArchiveInventory(actor: Actor, ids: string[], addToShopping = false) {
   const uniqueIds = [...new Set(ids)];
   return transaction(async (client) => {
-    const archived: unknown[] = [];
-    for (const id of uniqueIds) {
-      const before = await getOwned(client, "inventory_entries", id, actor.householdId);
-      const result = await client.query(
-        "UPDATE inventory_entries SET archived_at=now(),updated_at=now() WHERE id=$1 AND household_id=$2 RETURNING *",
-        [id, actor.householdId],
-      );
+    if (uniqueIds.length === 0) return { count: 0, items: [] };
+
+    const beforeResult = await client.query(
+      "SELECT * FROM inventory_entries WHERE id = ANY($1::uuid[]) AND household_id=$2 FOR UPDATE",
+      [uniqueIds, actor.householdId]
+    );
+    if (beforeResult.rows.length !== uniqueIds.length) {
+      for (const id of uniqueIds) {
+        await getOwned(client, "inventory_entries", id, actor.householdId);
+      }
+    }
+    const beforeMap = new Map(beforeResult.rows.map(r => [r.id, r]));
+
+    const result = await client.query(
+      `UPDATE inventory_entries SET archived_at=now(),updated_at=now() WHERE id = ANY($1::uuid[]) AND household_id=$2 RETURNING *`,
+      [uniqueIds, actor.householdId]
+    );
+
+    for (const row of result.rows) {
       await audit(
         client,
         actor,
         "bulk_archive",
         "inventory_entry",
-        id,
-        before,
-        result.rows[0],
-        "Removed through bulk inventory action",
+        row.id,
+        beforeMap.get(row.id),
+        row,
+        "Removed through bulk inventory action"
       );
-      if (addToShopping) {
+    }
+
+    if (addToShopping) {
+      for (const row of result.rows) {
         await addInventoryToShopping(
           client,
           actor,
-          before,
-          "Added automatically during bulk inventory removal",
+          beforeMap.get(row.id) as Record<string, unknown>,
+          "Added automatically during bulk inventory removal"
         );
       }
-      archived.push(result.rows[0]);
     }
-    return { count: archived.length, items: archived };
+    return { count: result.rows.length, items: result.rows };
   });
 }
 
