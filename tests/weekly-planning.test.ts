@@ -63,10 +63,7 @@ import {
   reviseWeeklyPlan,
   validateWeeklyPlan,
 } from "../lib/services/weekly-planning";
-import {
-  reconcileSameUnitShoppingShortfalls,
-  reconcileWeeklyPlanShopping,
-} from "../lib/services/weekly-shopping";
+import { reconcileWeeklyPlanShopping } from "../lib/services/weekly-shopping";
 import { listWeeklyPlanJobs, listWeeklyPlans } from "../lib/db/queries";
 
 const householdId = "22222222-2222-4222-8222-222222222222";
@@ -944,7 +941,7 @@ describe("premium weekly planning", () => {
         unit: item.unit,
       })),
     );
-    const reconciled = reconcileSameUnitShoppingShortfalls(plan, household);
+    const reconciled = reconcileWeeklyPlanShopping(plan, household);
     expect(reconciled.changes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ item: "Cucumbers", quantity: 2, unit: "bag" }),

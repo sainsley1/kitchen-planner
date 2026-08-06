@@ -902,11 +902,6 @@ export function reconcileWeeklyPlanShopping(
   return { plan: scored, changes: [...requirements.changes, ...inventory.changes] };
 }
 
-/** @deprecated Use reconcileWeeklyPlanShopping. */
-export function reconcileSameUnitShoppingShortfalls(plan: WeeklyPlan, context: PlanningContext) {
-  return reconcileWeeklyPlanShopping(plan, context);
-}
-
 export function hasSameUnitShoppingCoverage(
   plan: WeeklyPlan,
   context: PlanningContext,
