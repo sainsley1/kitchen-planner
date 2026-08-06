@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatHouseholdDateTime, householdDateKey, householdSaturdayKey } from "../lib/datetime";
+import {
+  formatHouseholdDateTime,
+  householdDateKey,
+  householdSaturdayKey,
+  formatDateKey,
+  addDaysToDateKey,
+} from "../lib/datetime";
 
 describe("Vancouver household time", () => {
   it("converts UTC timestamps to the preceding PDT calendar date when appropriate", () => {
@@ -14,5 +20,46 @@ describe("Vancouver household time", () => {
   it("uses PST in winter and computes the household Saturday", () => {
     expect(formatHouseholdDateTime("2026-01-15T20:00:00.000Z")).toMatch(/PST|GMT-8/);
     expect(householdSaturdayKey("2026-07-15T18:00:00.000Z")).toBe("2026-07-11");
+  });
+});
+
+describe("formatDateKey", () => {
+  it("formats a date string using Intl.DateTimeFormatOptions in UTC", () => {
+    const formattedShort = formatDateKey("2024-01-15", { month: "short", day: "numeric" });
+    expect(formattedShort).toMatch(/Jan\.?\s*15/);
+
+    const formattedLong = formatDateKey("2024-12-31", {
+      month: "long",
+      day: "2-digit",
+      year: "numeric",
+    });
+    expect(formattedLong).toMatch(/December\s*31,?\s*2024/);
+  });
+
+  it("handles different date keys appropriately", () => {
+    const formattedLeap = formatDateKey("2020-02-29", { month: "short", day: "numeric" });
+    expect(formattedLeap).toMatch(/Feb\.?\s*29/);
+  });
+});
+
+describe("addDaysToDateKey", () => {
+  it("adds positive days to a date string", () => {
+    expect(addDaysToDateKey("2024-01-15", 5)).toBe("2024-01-20");
+    expect(addDaysToDateKey("2024-12-25", 10)).toBe("2025-01-04");
+  });
+
+  it("subtracts days with negative numbers", () => {
+    expect(addDaysToDateKey("2024-01-15", -5)).toBe("2024-01-10");
+    expect(addDaysToDateKey("2024-01-05", -10)).toBe("2023-12-26");
+  });
+
+  it("handles month and year rollovers", () => {
+    expect(addDaysToDateKey("2020-02-28", 1)).toBe("2020-02-29"); // Leap year
+    expect(addDaysToDateKey("2021-02-28", 1)).toBe("2021-03-01"); // Non-leap year
+  });
+
+  it("throws an error for an invalid date string", () => {
+    expect(() => addDaysToDateKey("invalid-date", 1)).toThrow("Invalid date key");
+    expect(() => addDaysToDateKey("", 5)).toThrow("Invalid date key");
   });
 });
