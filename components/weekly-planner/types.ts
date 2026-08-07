@@ -37,4 +37,3 @@ export interface WeeklyPlannerProps {
   routineModel: string;
   fallbackModel: string;
 }
-
