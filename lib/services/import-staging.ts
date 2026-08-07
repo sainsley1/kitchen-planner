@@ -63,25 +63,38 @@ export async function stageWorkbook(
       ],
     );
     const batchId = batch.rows[0].id;
-    for (const row of staged)
+    if (staged.length > 0) {
+      const batchIds = staged.map(() => batchId);
+      const sheets = staged.map((r) => r.sheet);
+      const rows = staged.map((r) => r.row);
+      const statuses = staged.map((r) => r.status);
+      const raws = staged.map((r) => JSON.stringify(r.raw));
+      const normalizeds = staged.map((r) => JSON.stringify(r.normalized));
+      const messagesList = staged.map((r) => JSON.stringify(r.messages));
+      const destTypes = staged.map((r) => r.destinationType);
+      const reconciliations = staged.map((r) => r.requiresReconciliation);
+      const actions = staged.map((r) => r.suggestedAction);
+      const duplicates = staged.map((r) => JSON.stringify(r.duplicateCandidates));
+
       await client.query(
         `INSERT INTO import_rows
       (batch_id,source_sheet,source_row,status,raw_payload,normalized_payload,messages,destination_type,requires_reconciliation,suggested_action,duplicate_candidates)
-      VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8,$9,$10,$11::jsonb)`,
+      SELECT * FROM UNNEST($1::uuid[], $2::text[], $3::integer[], $4::text[], $5::jsonb[], $6::jsonb[], $7::jsonb[], $8::text[], $9::boolean[], $10::text[], $11::jsonb[])`,
         [
-          batchId,
-          row.sheet,
-          row.row,
-          row.status,
-          JSON.stringify(row.raw),
-          JSON.stringify(row.normalized),
-          JSON.stringify(row.messages),
-          row.destinationType,
-          row.requiresReconciliation,
-          row.suggestedAction,
-          JSON.stringify(row.duplicateCandidates),
+          batchIds,
+          sheets,
+          rows,
+          statuses,
+          raws,
+          normalizeds,
+          messagesList,
+          destTypes,
+          reconciliations,
+          actions,
+          duplicates,
         ],
       );
+    }
     await client.query(
       `INSERT INTO audit_events (household_id,actor_user_id,source,action,entity_type,entity_id,reason,after_state)
       VALUES ($1,$2,'import','preview','import_batch',$3,'Workbook staged for user reconciliation; no production rows changed',$4::jsonb)`,
