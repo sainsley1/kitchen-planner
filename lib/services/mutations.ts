@@ -776,21 +776,19 @@ export async function bulkArchiveInventory(actor: Actor, ids: string[], addToSho
       afterById.set(row.id, row);
     }
 
+    const auditEvents = [];
     const archived: unknown[] = [];
     for (const id of uniqueIds) {
       const before = beforeById.get(id);
       const after = afterById.get(id);
 
-      await audit(
-        client,
-        actor,
-        "bulk_archive",
-        "inventory_entry",
-        id,
-        before,
-        after,
-        "Removed through bulk inventory action",
-      );
+      auditEvents.push({
+        entityId: id,
+        beforeState: before,
+        afterState: after,
+        reason: "Removed through bulk inventory action",
+      });
+
       if (addToShopping) {
         await addInventoryToShopping(
           client,
@@ -801,6 +799,11 @@ export async function bulkArchiveInventory(actor: Actor, ids: string[], addToSho
       }
       archived.push(after);
     }
+
+    if (auditEvents.length > 0) {
+      await auditMany(client, actor, "bulk_archive", "inventory_entry", auditEvents);
+    }
+
     return { count: archived.length, items: archived };
   });
 }
