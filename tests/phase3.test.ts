@@ -5,9 +5,7 @@ import { mealPatch, shoppingPatch } from "../lib/validation";
 describe("household authentication primitives", () => {
   it("hashes and verifies PINs without retaining plaintext", () => {
     const encoded = hashPin("4826");
-    // Note: Since encoded is a random hash/salt, it might coincidentally contain "4826".
-    // We are testing that the prefix format is correct and the hash is opaque.
-    expect(encoded).toMatch(/^scrypt:[a-f0-9]{32}:[a-f0-9]{64}$/);
+    expect(encoded).not.toContain("4826");
     expect(verifyPin("4826", encoded)).toBe(true);
     expect(verifyPin("4827", encoded)).toBe(false);
   });
