@@ -69,8 +69,8 @@ export function WeeklyPlanJobTracker({
                 {elapsed != null ? ` · ${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : ""}
               </small>
               <small>
-                {job.planningMode === "deep" ? "Deep" : "Balanced"} ·{" "}
-                {job.model ?? defaultModel} · {search}
+                {job.planningMode === "deep" ? "Deep" : "Balanced"} · {job.model ?? defaultModel} ·{" "}
+                {search}
               </small>
             </span>
             <span

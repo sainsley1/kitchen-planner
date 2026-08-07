@@ -42,10 +42,11 @@ export function WeeklyPlanSavingsBanner({ payload }: WeeklyPlanSavingsBannerProp
           </span>
         </div>
         <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--ink-soft)" }}>
-          Utilizes{" "}
-          {savings.stealsCount > 0 ? `${savings.stealsCount} Grade A+ flyer sales ` : ""}
+          Utilizes {savings.stealsCount > 0 ? `${savings.stealsCount} Grade A+ flyer sales ` : ""}
           {savings.stealsCount > 0 && savings.flavorAssetsCount > 0 ? "and " : ""}
-          {savings.flavorAssetsCount > 0 ? `${savings.flavorAssetsCount} pantry flavor assets` : ""}{" "}
+          {savings.flavorAssetsCount > 0
+            ? `${savings.flavorAssetsCount} pantry flavor assets`
+            : ""}{" "}
           to reduce net grocery spend.
         </p>
       </div>
