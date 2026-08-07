@@ -28,14 +28,10 @@ export function WeeklyPlanDayView({ plan, payload, users }: WeeklyPlanDayViewPro
     <div className="plan-days">
       {planDates.map((date) => {
         const meals = grouped.get(date) ?? [];
-        const exceptions = payload.coverageExceptions.filter(
-          (entry) => entry.mealDate === date,
-        );
+        const exceptions = payload.coverageExceptions.filter((entry) => entry.mealDate === date);
         return (
           <section className="plan-day" key={date}>
-            <h4>
-              {formatDateKey(date, { weekday: "long", month: "short", day: "numeric" })}
-            </h4>
+            <h4>{formatDateKey(date, { weekday: "long", month: "short", day: "numeric" })}</h4>
             {meals.map((meal) => {
               const recipeSource = plan.recipeSources.find(
                 (source) => source.url === meal.recipeUrl,
@@ -53,8 +49,7 @@ export function WeeklyPlanDayView({ plan, payload, users }: WeeklyPlanDayViewPro
                     <strong>{meal.dish}</strong>
                     <small>
                       {meal.cuisine} · {meal.technique} · {meal.servings} serving
-                      {meal.servings === 1 ? "" : "s"} · {meal.prepMinutes} min ·{" "}
-                      {meal.intensity}
+                      {meal.servings === 1 ? "" : "s"} · {meal.prepMinutes} min · {meal.intensity}
                     </small>
                     <p>{meal.rationale}</p>
                     {badges.length > 0 && (
@@ -77,10 +72,8 @@ export function WeeklyPlanDayView({ plan, payload, users }: WeeklyPlanDayViewPro
                               fontWeight: 700,
                               padding: "2px 7px",
                               borderRadius: "4px",
-                              background:
-                                badge.type === "sale_anchor" ? "#fef7e0" : "#e6f4ea",
-                              color:
-                                badge.type === "sale_anchor" ? "#b06000" : "#137333",
+                              background: badge.type === "sale_anchor" ? "#fef7e0" : "#e6f4ea",
+                              color: badge.type === "sale_anchor" ? "#b06000" : "#137333",
                               border: `1px solid ${badge.type === "sale_anchor" ? "#feefc3" : "#ceead6"}`,
                             }}
                           >
@@ -133,9 +126,8 @@ export function WeeklyPlanDayView({ plan, payload, users }: WeeklyPlanDayViewPro
                     {meal.leftoverFromMealId && (
                       <em>
                         Uses leftovers from{" "}
-                        {payload.meals.find(
-                          (source) => source.id === meal.leftoverFromMealId,
-                        )?.dish ?? "an earlier meal"}
+                        {payload.meals.find((source) => source.id === meal.leftoverFromMealId)
+                          ?.dish ?? "an earlier meal"}
                       </em>
                     )}
                   </div>
@@ -149,14 +141,10 @@ export function WeeklyPlanDayView({ plan, payload, users }: WeeklyPlanDayViewPro
                         {meal.saleItemIds.length === 1 ? "" : "s"}
                       </span>
                     )}
-                    {meal.leftoverServings > 0 && (
-                      <span>Reserve {meal.leftoverServings}</span>
-                    )}
+                    {meal.leftoverServings > 0 && <span>Reserve {meal.leftoverServings}</span>}
                     {meal.packedLunch && <span>Packed</span>}
                     {meal.workplaceMeal && (
-                      <span>
-                        {meal.workplaceFriendly ? "Work-friendly" : "Work warning"}
-                      </span>
+                      <span>{meal.workplaceFriendly ? "Work-friendly" : "Work warning"}</span>
                     )}
                   </div>
                 </div>
@@ -166,8 +154,7 @@ export function WeeklyPlanDayView({ plan, payload, users }: WeeklyPlanDayViewPro
               <div className="plan-meal plan-exception" key={entry.id}>
                 <span>
                   {optionLabel(entry.mealType)} ·{" "}
-                  {users.find((user) => user.id === entry.userId)?.displayName ??
-                    "Person"}
+                  {users.find((user) => user.id === entry.userId)?.displayName ?? "Person"}
                 </span>
                 <div>
                   <strong>No meal required</strong>

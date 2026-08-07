@@ -90,6 +90,8 @@ export async function reconcileImportBatchWithAi(actor: Actor, batchId: string) 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
+    const validRecommendations = [];
     for (const rec of value.recommendations) {
       const targetRow = unresolvedRows.find((r) => r.id === rec.rowId);
       if (!targetRow) continue;
@@ -98,14 +100,34 @@ export async function reconcileImportBatchWithAi(actor: Actor, batchId: string) 
         ...targetRow.messages,
         `AI (${rec.confidence} confidence): ${rec.rationale}`,
       ];
-
-      await client.query(
-        `UPDATE import_rows
-         SET suggested_action = $1, messages = $2::jsonb
-         WHERE id = $3 AND batch_id = $4`,
-        [rec.recommendedAction, JSON.stringify(newMessages), rec.rowId, batchId],
-      );
+      validRecommendations.push({
+        id: rec.rowId,
+        suggestedAction: rec.recommendedAction,
+        messages: JSON.stringify(newMessages),
+      });
       updatedCount += 1;
+    }
+
+    if (validRecommendations.length > 0) {
+      const values: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      for (const rec of validRecommendations) {
+        values.push(`($${paramIndex}::uuid, $${paramIndex + 1}::text, $${paramIndex + 2}::jsonb)`);
+        params.push(rec.id, rec.suggestedAction, rec.messages);
+        paramIndex += 3;
+      }
+      params.push(batchId);
+
+      const updateQuery = `
+        UPDATE import_rows AS ir
+        SET suggested_action = u.suggested_action,
+            messages = u.messages
+        FROM (VALUES ${values.join(", ")}) AS u(id, suggested_action, messages)
+        WHERE ir.id = u.id AND ir.batch_id = $${paramIndex}
+      `;
+      await client.query(updateQuery, params);
     }
 
     await client.query(

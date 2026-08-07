@@ -271,14 +271,12 @@ export function WeeklyPlanCard({
                   : "AI"}{" "}
             · {plan.model ?? (plan.modelTier === "planning" ? deepModel : balancedModel)}
           </span>
-          {plan.totalTokens != null && (
-            <span>{plan.totalTokens.toLocaleString()} tokens</span>
-          )}
+          {plan.totalTokens != null && <span>{plan.totalTokens.toLocaleString()} tokens</span>}
           {plan.discoverRecipes && (
             <span>
               {plan.webSearchCalls ?? 0} web search call
-              {plan.webSearchCalls === 1 ? "" : "s"} · {plan.recipeSources.length} verified
-              recipe source{plan.recipeSources.length === 1 ? "" : "s"}
+              {plan.webSearchCalls === 1 ? "" : "s"} · {plan.recipeSources.length} verified recipe
+              source{plan.recipeSources.length === 1 ? "" : "s"}
             </span>
           )}
           {plan.estimatedCostUsd && (

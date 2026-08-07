@@ -20,7 +20,6 @@ import type {
   ShoppingLine,
 } from "./types";
 
-
 function blankMeal(plan: WeeklyPlanRecord): Meal {
   return {
     id: `manual-${Date.now()}`,
@@ -142,9 +141,7 @@ export function WeeklyPlanEditor({
           <input
             value={payload.title}
             onChange={(event) =>
-              setDraft((current) =>
-                current ? { ...current, title: event.target.value } : current,
-              )
+              setDraft((current) => (current ? { ...current, title: event.target.value } : current))
             }
           />
         </label>
@@ -311,9 +308,7 @@ export function WeeklyPlanEditor({
                 min="1"
                 max="40"
                 value={meal.servings}
-                onChange={(event) =>
-                  updateMeal(index, { servings: Number(event.target.value) })
-                }
+                onChange={(event) => updateMeal(index, { servings: Number(event.target.value) })}
               />
             </label>
             <label>
@@ -338,9 +333,7 @@ export function WeeklyPlanEditor({
               >
                 <option value="">Not leftovers</option>
                 {payload.meals
-                  .filter(
-                    (source) => source.id !== meal.id && source.mealDate < meal.mealDate,
-                  )
+                  .filter((source) => source.id !== meal.id && source.mealDate < meal.mealDate)
                   .map((source) => (
                     <option value={source.id} key={source.id}>
                       {source.mealDate} · {source.dish}
@@ -355,9 +348,7 @@ export function WeeklyPlanEditor({
                 min="0"
                 max="720"
                 value={meal.prepMinutes}
-                onChange={(event) =>
-                  updateMeal(index, { prepMinutes: Number(event.target.value) })
-                }
+                onChange={(event) => updateMeal(index, { prepMinutes: Number(event.target.value) })}
               />
             </label>
             <label>
@@ -416,9 +407,7 @@ export function WeeklyPlanEditor({
               Recipe title
               <input
                 value={meal.recipeTitle ?? ""}
-                onChange={(event) =>
-                  updateMeal(index, { recipeTitle: event.target.value || null })
-                }
+                onChange={(event) => updateMeal(index, { recipeTitle: event.target.value || null })}
               />
             </label>
             <label className="span-two">
@@ -426,9 +415,7 @@ export function WeeklyPlanEditor({
               <input
                 type="url"
                 value={meal.recipeUrl ?? ""}
-                onChange={(event) =>
-                  updateMeal(index, { recipeUrl: event.target.value || null })
-                }
+                onChange={(event) => updateMeal(index, { recipeUrl: event.target.value || null })}
               />
             </label>
             <label className="checkbox-label">
@@ -451,9 +438,7 @@ export function WeeklyPlanEditor({
               <input
                 type="checkbox"
                 checked={meal.workplaceFriendly}
-                onChange={(event) =>
-                  updateMeal(index, { workplaceFriendly: event.target.checked })
-                }
+                onChange={(event) => updateMeal(index, { workplaceFriendly: event.target.checked })}
               />
               Workplace-friendly
             </label>
@@ -561,8 +546,7 @@ export function WeeklyPlanEditor({
                   value={requirement.quantity ?? ""}
                   onChange={(event) =>
                     updateRequirement(index, requirementIndex, {
-                      quantity:
-                        event.target.value === "" ? null : Number(event.target.value),
+                      quantity: event.target.value === "" ? null : Number(event.target.value),
                     })
                   }
                 />
@@ -720,9 +704,7 @@ export function WeeklyPlanEditor({
           className="secondary-button"
           onClick={() =>
             setDraft((current) =>
-              current
-                ? { ...current, shopping: [...current.shopping, blankShopping()] }
-                : current,
+              current ? { ...current, shopping: [...current.shopping, blankShopping()] } : current,
             )
           }
         >
@@ -784,9 +766,7 @@ export function WeeklyPlanEditor({
                   current
                     ? {
                         ...current,
-                        shopping: current.shopping.filter(
-                          (_, itemIndex) => itemIndex !== index,
-                        ),
+                        shopping: current.shopping.filter((_, itemIndex) => itemIndex !== index),
                       }
                     : current,
                 );
@@ -809,11 +789,7 @@ export function WeeklyPlanEditor({
         <div className="plan-inventory-association">
           <div className="editor-toolbar">
             <strong>Inventory for {inventorySearch.line.item}</strong>
-            <button
-              type="button"
-              className="danger-link"
-              onClick={() => setInventorySearch(null)}
-            >
+            <button type="button" className="danger-link" onClick={() => setInventorySearch(null)}>
               Cancel
             </button>
           </div>
@@ -844,9 +820,7 @@ export function WeeklyPlanEditor({
                   type="button"
                   className="inventory-association-option"
                   key={entry.id}
-                  onClick={() =>
-                    setShoppingDecision(inventorySearch.line, "inventory", entry.id)
-                  }
+                  onClick={() => setShoppingDecision(inventorySearch.line, "inventory", entry.id)}
                 >
                   <strong>
                     {entry.ingredient}
@@ -895,9 +869,7 @@ export function WeeklyPlanEditor({
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={() =>
-                      setInventorySearch({ line: sourceLine, query: decision.item })
-                    }
+                    onClick={() => setInventorySearch({ line: sourceLine, query: decision.item })}
                   >
                     Change
                   </button>
