@@ -39,6 +39,13 @@ load_config() {
 }
 
 interactive_setup() {
+  if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+  fi
+
   echo -e "\n${BOLD}${CYAN}=================================================================${RESET}"
   echo -e "${BOLD}${CYAN}  🥗 Kitchen Planner Interactive Installation & Setup Wizard  ${RESET}"
   echo -e "${BOLD}${CYAN}=================================================================${RESET}"
@@ -78,11 +85,15 @@ interactive_setup() {
   read -r -p "PostgreSQL Database User [$default_db_user]: " input_db_user
   POSTGRES_USER="${input_db_user:-$default_db_user}"
 
-  local auto_pg_pass
-  auto_pg_pass="$(openssl rand -hex 16 2>/dev/null || tr -dc A-Za-z0-9 </dev/urandom 2>/dev/null | head -c 32 || echo 'kp-secret-pg-pass')"
-
-  read -r -p "PostgreSQL Password (press Enter to auto-generate): " input_pg_pass
-  POSTGRES_PASSWORD="${input_pg_pass:-$auto_pg_pass}"
+  if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    read -r -p "PostgreSQL Password [*** hidden ***] (press Enter to keep existing): " input_pg_pass
+    POSTGRES_PASSWORD="${input_pg_pass:-$POSTGRES_PASSWORD}"
+  else
+    local auto_pg_pass
+    auto_pg_pass="$(openssl rand -hex 16 2>/dev/null || tr -dc A-Za-z0-9 </dev/urandom 2>/dev/null | head -c 32 || echo 'kp-secret-pg-pass')"
+    read -r -p "PostgreSQL Password (press Enter to auto-generate): " input_pg_pass
+    POSTGRES_PASSWORD="${input_pg_pass:-$auto_pg_pass}"
+  fi
   DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
   echo -e "${GREEN}✓ PostgreSQL database configuration complete.${RESET}"
   echo
@@ -93,18 +104,31 @@ interactive_setup() {
   read -r -p "Household Name [$default_hname]: " input_hname
   APP_HOUSEHOLD_NAME="${input_hname:-$default_hname}"
 
-  local auto_secret
-  auto_secret="$(openssl rand -hex 24 2>/dev/null || tr -dc A-Za-z0-9 </dev/urandom 2>/dev/null | head -c 48 || echo 'kp-session-secret-key')"
-  read -r -p "Session Secret Key (press Enter to auto-generate): " input_secret
-  HOUSEHOLD_SESSION_SECRET="${input_secret:-$auto_secret}"
+  if [[ -n "${HOUSEHOLD_SESSION_SECRET:-}" ]]; then
+    read -r -p "Session Secret Key [*** hidden ***] (press Enter to keep existing): " input_secret
+    HOUSEHOLD_SESSION_SECRET="${input_secret:-$HOUSEHOLD_SESSION_SECRET}"
+  else
+    local auto_secret
+    auto_secret="$(openssl rand -hex 24 2>/dev/null || tr -dc A-Za-z0-9 </dev/urandom 2>/dev/null | head -c 48 || echo 'kp-session-secret-key')"
+    read -r -p "Session Secret Key (press Enter to auto-generate): " input_secret
+    HOUSEHOLD_SESSION_SECRET="${input_secret:-$auto_secret}"
+  fi
 
   local default_u1_name="${HOUSEHOLD_USER_1_NAME:-Owner}"
   read -r -p "Primary User Name [$default_u1_name]: " input_u1_name
   HOUSEHOLD_USER_1_NAME="${input_u1_name:-$default_u1_name}"
 
   while true; do
-    read -r -s -p "Primary User PIN (min 4 characters): " input_u1_pin
-    echo
+    if [[ -n "${HOUSEHOLD_USER_1_PIN:-}" ]]; then
+      read -r -s -p "Primary User PIN [*** hidden ***] (press Enter to keep existing): " input_u1_pin
+      echo
+      if [[ -z "$input_u1_pin" ]]; then
+        break
+      fi
+    else
+      read -r -s -p "Primary User PIN (min 4 characters): " input_u1_pin
+      echo
+    fi
     if [[ ${#input_u1_pin} -ge 4 ]]; then
       HOUSEHOLD_USER_1_PIN="$input_u1_pin"
       break
@@ -117,8 +141,16 @@ interactive_setup() {
   HOUSEHOLD_USER_2_NAME="${input_u2_name:-$default_u2_name}"
 
   while true; do
-    read -r -s -p "Secondary User PIN (min 4 characters): " input_u2_pin
-    echo
+    if [[ -n "${HOUSEHOLD_USER_2_PIN:-}" ]]; then
+      read -r -s -p "Secondary User PIN [*** hidden ***] (press Enter to keep existing): " input_u2_pin
+      echo
+      if [[ -z "$input_u2_pin" ]]; then
+        break
+      fi
+    else
+      read -r -s -p "Secondary User PIN (min 4 characters): " input_u2_pin
+      echo
+    fi
     if [[ ${#input_u2_pin} -ge 4 ]]; then
       HOUSEHOLD_USER_2_PIN="$input_u2_pin"
       break
